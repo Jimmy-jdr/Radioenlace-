@@ -1,3 +1,4 @@
+/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // radio.js — Cálculos de radioenlaces punto a punto (sin dependencias)
 // Todas las funciones son puras: reciben números y devuelven números u

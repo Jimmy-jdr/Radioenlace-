@@ -1,3 +1,4 @@
+/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // perfil.js — Gráfico del perfil del trayecto (SVG)
 // Dibuja: relieve (con curvatura k), línea de visión, 1.ª zona de

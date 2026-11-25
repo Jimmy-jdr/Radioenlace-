@@ -1,9 +1,10 @@
+/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // sw.js — Service worker: permite abrir la app sin conexión y guarda
 // en caché las teselas del mapa y el relieve ya consultados.
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.0.2';
+const VERSION = 'radioenlace-v1.0.4';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',

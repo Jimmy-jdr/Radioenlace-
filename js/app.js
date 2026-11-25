@@ -1,3 +1,4 @@
+/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // app.js — Interfaz: une el mapa, los datos, el perfil y los cálculos
 // =====================================================================
