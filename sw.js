@@ -4,7 +4,7 @@
 // en caché las teselas del mapa y el relieve ya consultados.
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.0.4';
+const VERSION = 'radioenlace-v1.0.5';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',
