@@ -35,7 +35,8 @@ export class GraficoPerfil {
 
   mensaje(texto) { this.vacio.textContent = texto; this.vacio.hidden = !texto; }
 
-  pintar(analisis) { this.an = analisis; this.mensaje(''); this.dibujar(); }
+  // opciones.ocultar: modo ejercicio (no se señalan el punto crítico ni las invasiones)
+  pintar(analisis, opciones = {}) { this.an = analisis; this.ocultar = !!opciones.ocultar; this.mensaje(''); this.dibujar(); }
 
   dibujar() {
     const an = this.an;
@@ -100,11 +101,13 @@ export class GraficoPerfil {
       }
       inv = [];
     };
-    for (const p of P) {
-      if (p.relacion != null && p.i > 0 && p.i < P.length - 1 && p.relacion < an.despejeMinimo) inv.push(p);
-      else cerrarInv();
+    if (!this.ocultar) {
+      for (const p of P) {
+        if (p.relacion != null && p.i > 0 && p.i < P.length - 1 && p.relacion < an.despejeMinimo) inv.push(p);
+        else cerrarInv();
+      }
+      cerrarInv();
     }
-    cerrarInv();
 
     // 60 % y línea de visión
     partes.push(`<path class="limite60" d="${ruta(P.map((p) => [X(p.d), Y(p.los - 0.6 * p.r1)]))}"/>`);
@@ -120,7 +123,7 @@ export class GraficoPerfil {
     for (const p of P) if (p.zEf == null) partes.push(`<line class="falta" x1="${X(p.d)}" x2="${X(p.d)}" y1="${H - m.b - 7}" y2="${H - m.b}"/>`);
 
     // Punto más comprometido
-    const k = an.peor;
+    const k = this.ocultar ? null : an.peor;
     if (k) {
       const x = X(k.d), clase = an.estado;
       partes.push(`<line class="critico-linea ${clase}" x1="${x}" x2="${x}" y1="${Y(k.zEf)}" y2="${Y(k.los)}"/>`);
@@ -150,13 +153,14 @@ export class GraficoPerfil {
     this.cursor?.setAttribute('x1', this.escala.X(p.d));
     this.cursor?.setAttribute('x2', this.escala.X(p.d));
     const filas = [
-      ['Distancia', `${f(p.d / 1000, 2)} km`],
+      ['Distancia desde A', `${f(p.d / 1000, 3)} km`],
       ['Cota del terreno', p.z == null ? 'sin dato' : `${f(p.z, 1)} m`],
       ['Curvatura (flecha)', `${f(p.flecha, 2)} m`],
       ['Línea de visión', `${f(p.los, 1)} m`],
       ['Radio r₁', `${f(p.r1, 2)} m`],
       ['Despeje', p.despeje == null ? '—' : `${f(p.despeje, 1)} m (${f((p.relacion ?? 0) * 100, 0)} % de r₁)`],
     ];
+    if (this.ocultar) filas.splice(2);
     this.lectura.innerHTML = filas.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('');
     this.lectura.hidden = false;
     const izq = x > W / 2;

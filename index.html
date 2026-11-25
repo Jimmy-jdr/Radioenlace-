@@ -11,7 +11,8 @@
   <link rel="license" href="https://creativecommons.org/licenses/by-nc-nd/4.0/">
   <meta name="theme-color" content="#10222c">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="iconos/icono-192.png" type="image/png">
+  <link rel="icon" href="iconos/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="iconos/icono-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -24,7 +25,7 @@
 <div id="app">
   <header class="cabecera">
     <div class="marca">
-      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 40 L10 14 L14 40 M34 40 L38 10 L42 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M10 14 Q24 2 38 10" fill="none" stroke="#7fd1ff" stroke-width="3"/><ellipse cx="24" cy="12" rx="14" ry="5" fill="none" stroke="#7fd1ff" stroke-width="1.5" stroke-dasharray="3 3" transform="rotate(-6 24 12)"/></svg>
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 22 A16 9.5 0 0 1 40 22" fill="none" stroke="#9ff7e6" stroke-width="3.4" stroke-linecap="round"/><path d="M8 22 Q24 37 40 22" fill="none" stroke="#2ee0cf" stroke-width="1.8"/><line x1="8" y1="22" x2="40" y2="22" stroke="#9ec8ff" stroke-width=".7"/><path d="M7.2 23 h1.6 v6 h-1.6z M39.2 23 h1.6 v6 h-1.6z" fill="#ff5a3c"/><path d="M2 36 L7 29 L11 29 L17.5 33.5 L24 26.5 L25.5 27.8 L29.5 23.5 L36 31.5 L40 29 L42.5 29 L46.5 36 L32 36 L24.3 30.7 L19.5 36 Z" fill="#ff5a3c"/><circle cx="8" cy="22" r="2.6" fill="#9ff7e6"/><circle cx="40" cy="22" r="2.6" fill="#9ff7e6"/></svg>
       <div>
         <h1>Radioenlace PxP</h1>
         <p>Perfil, Fresnel y presupuesto, paso a paso</p>
@@ -33,6 +34,7 @@
     <div class="acciones">
       <label class="oculto" for="ejemplo">Ejemplos</label>
       <select id="ejemplo" class="boton-cab"></select>
+      <button type="button" id="btn-ejercicio" class="boton-cab" aria-pressed="false">Modo ejercicio</button>
       <button type="button" id="btn-compartir" class="boton-cab">Compartir</button>
       <button type="button" id="btn-instalar" class="boton-cab destacado" hidden>Instalar</button>
     </div>
@@ -67,9 +69,9 @@
     <section id="s-perfil" class="tarjeta area-perfil">
       <div class="tarjeta-cab">
         <h2><span class="paso-n">3</span> Perfil del trayecto</h2>
-        <span id="chip-perfil" class="chip">…</span>
+        <span id="chip-perfil" class="chip solo-revelado">…</span>
       </div>
-      <div id="aviso-perfil" class="aviso-perfil" role="status" hidden></div>
+      <div id="aviso-perfil" class="aviso-perfil solo-revelado" role="status" hidden></div>
       <div id="grafico"></div>
       <ul class="leyenda">
         <li><i class="l-terreno"></i>Relieve + curvatura (k)</li>
@@ -188,26 +190,36 @@
       <article class="tarjeta resultado">
         <div class="tarjeta-cab"><h2><span class="paso-n">4</span> Presupuesto en espacio libre</h2></div>
         <dl class="cifras">
-          <div><dt>Potencia transmitida</dt><dd id="res-ptx">—</dd></div>
-          <div><dt>PIRE</dt><dd id="res-pire">—</dd></div>
-          <div><dt>Pérdidas en espacio libre</dt><dd id="res-perdida">—</dd></div>
-          <div class="grande"><dt>Potencia recibida</dt><dd id="res-prx">—</dd></div>
-          <div class="grande"><dt>Margen sobre la sensibilidad</dt><dd id="res-margen">—</dd></div>
+          <div><dt>Potencia transmitida</dt><dd id="res-ptx" class="oculta">—</dd></div>
+          <div><dt>PIRE</dt><dd id="res-pire" class="oculta">—</dd></div>
+          <div><dt>Pérdidas en espacio libre</dt><dd id="res-perdida" class="oculta">—</dd></div>
+          <div class="grande"><dt>Potencia recibida</dt><dd id="res-prx" class="oculta">—</dd></div>
+          <div class="grande"><dt>Margen sobre la sensibilidad</dt><dd id="res-margen" class="oculta">—</dd></div>
         </dl>
-        <div id="barra-margen" class="barra" aria-hidden="true"><span></span></div>
-        <p id="veredicto-presupuesto" class="veredicto"></p>
+        <div id="barra-margen" class="barra solo-revelado" aria-hidden="true"><span></span></div>
+        <p id="veredicto-presupuesto" class="veredicto solo-revelado"></p>
       </article>
       <article class="tarjeta resultado">
         <div class="tarjeta-cab"><h2><span class="paso-n">5</span> Despeje de Fresnel</h2></div>
         <dl class="cifras">
-          <div><dt>Punto más comprometido</dt><dd id="res-peor-d">—</dd></div>
-          <div><dt>Despeje sobre el relieve</dt><dd id="res-peor-c">—</dd></div>
-          <div><dt>Radio r₁ en ese punto</dt><dd id="res-peor-r1">—</dd></div>
-          <div class="grande"><dt>Despeje / r₁</dt><dd id="res-peor-pct">—</dd></div>
-          <div><dt>r₁ en el punto medio</dt><dd id="res-r1-medio">—</dd></div>
-          <div><dt>Flecha de la Tierra en el centro</dt><dd id="res-flecha">—</dd></div>
+          <div><dt>Punto más comprometido</dt><dd id="res-peor-d" class="oculta">—</dd></div>
+          <div><dt>Despeje sobre el relieve</dt><dd id="res-peor-c" class="oculta">—</dd></div>
+          <div><dt>Radio r₁ en ese punto</dt><dd id="res-peor-r1" class="oculta">—</dd></div>
+          <div class="grande"><dt>Despeje / r₁</dt><dd id="res-peor-pct" class="oculta">—</dd></div>
+          <div><dt>r₁ en el punto medio</dt><dd id="res-r1-medio" class="oculta">—</dd></div>
+          <div><dt>Flecha de la Tierra en el centro</dt><dd id="res-flecha" class="oculta">—</dd></div>
         </dl>
-        <p id="veredicto-fresnel" class="veredicto"></p>
+        <p id="veredicto-fresnel" class="veredicto solo-revelado"></p>
+      </article>
+      <article class="tarjeta exportar">
+        <div class="tarjeta-cab"><h2>Exportar resultados</h2></div>
+        <p class="nota">Archivos CSV para Excel (configuración española: punto y coma y coma decimal) del enlace que estás viendo.</p>
+        <p class="nota solo-ejercicio">En modo ejercicio la exportación se activa al pulsar «Comprobar resultados».</p>
+        <div class="botones-exportar solo-revelado">
+          <button type="button" id="btn-csv-informe" class="boton">Descargar informe CSV</button>
+          <button type="button" id="btn-csv-perfil" class="boton secundario">Descargar perfil CSV</button>
+        </div>
+        <p class="nota">El informe tiene una fila por cada dato o cálculo, con su fórmula, la sustitución numérica, el valor y la unidad. El perfil tiene una fila por cada cota del trayecto.</p>
       </article>
     </section>
 
@@ -216,18 +228,31 @@
     <section id="s-calculos" class="tarjeta area-calc">
       <div class="tarjeta-cab"><h2><span class="paso-n">6</span> Cálculos paso a paso</h2></div>
       <div id="enunciado" class="enunciado" hidden><h3 id="enunciado-titulo"></h3><p id="enunciado-texto"></p></div>
-      <div id="comprobacion" class="comprobacion" hidden></div>
+      <div id="comprobacion" class="comprobacion solo-revelado" hidden></div>
+      <p class="nota">Cada fila muestra la fórmula y el resultado. Tócala para ver los datos, la fórmula completa y la sustitución numérica. El informe CSV incluye todo el detalle.</p>
       <div id="pasos"></div>
+      <details class="fuentes-biblio">
+        <summary>Fuentes y criterios de cálculo</summary>
+        <ol id="fuentes-biblio"></ol>
+        <p class="nota">Criterio de despeje usado: al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k elegido. Para el diseño de enlaces reales, la UIT-R P.530 aplica criterios más exigentes.</p>
+      </details>
     </section>
   </main>
 
   <footer class="pie">
     <p class="autoria"><b>Radioenlace PxP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a href="https://www.safecreative.org/work/2611257759054-radioenlace-pxp" target="_blank" rel="noopener">2611257759054</a>.</p>
     <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
-    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión 1.0.5 · espacio libre y Fresnel. Próximamente: Longley–Rice y mapas de cobertura.</p>
+    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión 1.0.9 · espacio libre y Fresnel. Próximamente: Longley–Rice y mapas de cobertura.</p>
   </footer>
 </div>
 
+<div id="barra-ejercicio" class="barra-ejercicio" hidden>
+  <p id="texto-ejercicio">Modo ejercicio</p>
+  <div class="botones">
+    <button type="button" id="btn-comprobar" class="boton">Comprobar resultados</button>
+    <button type="button" id="btn-salir-ejercicio" class="boton secundario">Salir</button>
+  </div>
+</div>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="ayuda-ios" class="hoja" hidden>
   <div>

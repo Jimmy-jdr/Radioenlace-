@@ -9,6 +9,8 @@ import { Mapa } from './mapa.js';
 import { GraficoPerfil } from './perfil.js';
 import { construirPasos } from './explicacion.js';
 import { EJEMPLOS } from './ejemplos.js';
+import { filasInforme, filasPerfil, aCSV, nombreArchivo, descargar } from './informe.js';
+import { FUENTES_BIBLIO } from './fuentes.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -29,6 +31,8 @@ let analisis = null;
 let controlDescarga = null;
 let temporizador = 0;
 let ultimoCalculo = null;
+let ultimoContexto = null;  // lo que se exporta a CSV
+let revelado = false;       // modo ejercicio: resultados visibles tras «Comprobar»
 
 function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
@@ -302,19 +306,24 @@ function recalcular() {
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lat - estado.b.lat) < 1e-6 &&
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lon - estado.b.lon) < 1e-6 &&
     (perfil.fuente.id === 'plano') === (estado.terreno === 'plano');
-  if (!vigente) return; // llegará al terminar la descarga en curso
+  const base = { e, a: { ...estado.a }, b: { ...estado.b }, dKm, modelo, resModelo, pres };
+  if (!vigente) {
+    ultimoContexto = { ...base, an: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
+    return; // el perfil llegará al terminar la descarga en curso
+  }
 
   analisis = R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k: e.k });
-  grafico.pintar(analisis);
+  grafico.pintar(analisis, { ocultar: ocultando() });
   pintarFresnel(analisis);
   pintarFuente(perfil, perfil.avisos);
   $('#a-cota').textContent = `${f(analisis.zA, 1)} m`;
   $('#b-cota').textContent = `${f(analisis.zB, 1)} m`;
-  mapa.ponerPuntoCritico(analisis.peor ? { lat: analisis.peor.lat, lon: analisis.peor.lon } : null, analisis.estado);
+  mapa.ponerPuntoCritico(analisis.peor && !ocultando() ? { lat: analisis.peor.lat, lon: analisis.peor.lon } : null, analisis.estado);
 
   const pasos = construirPasos({ e, a: estado.a, b: estado.b, dKm, modelo, resModelo, pres, an: analisis }, f);
   pintarPasos(pasos);
   ultimoCalculo = { perdida: resModelo.perdida, prx: pres.prx, margen: pres.margen, r1Medio: analisis.r1Medio };
+  ultimoContexto = { ...base, an: analisis, perfil, pasos };
   pintarComprobacion();
 }
 
@@ -326,13 +335,13 @@ function pintarPresupuesto(e, res, pres) {
   $('#res-margen').textContent = `${f(pres.margen, 1)} dB`;
   $('#res-ptx').textContent = `${f(e.ptxDbm, 2)} dBm`;
   const v = $('#veredicto-presupuesto');
-  v.className = `veredicto ${ok ? 'bien' : 'mal'}`;
+  v.className = `veredicto solo-revelado ${ok ? 'bien' : 'mal'}`;
   v.innerHTML = ok
     ? `<b>Nivel suficiente en espacio libre.</b> La señal recibida supera la sensibilidad en ${f(pres.margen, 1)} dB.`
     : `<b>Nivel insuficiente.</b> Faltan ${f(-pres.margen, 1)} dB para alcanzar la sensibilidad del receptor.`;
   const barra = Math.max(0, Math.min(100, ((pres.prx - e.sens + 20) / 100) * 100));
   $('#barra-margen').style.setProperty('--valor', `${barra}%`);
-  $('#barra-margen').className = `barra ${ok ? 'bien' : 'mal'}`;
+  $('#barra-margen').className = `barra solo-revelado ${ok ? 'bien' : 'mal'}`;
 }
 
 function pintarFresnel(an) {
@@ -344,9 +353,9 @@ function pintarFresnel(an) {
     fresnel: ['aviso', 'Fresnel invadido', `<b>El relieve invade la 1.ª zona de Fresnel.</b> Hay visión directa, pero solo queda libre el ${f(p ? p.relacion * 100 : 0, 0)}&nbsp;% de r₁ (se exige ≥ 60&nbsp;%). Habrá pérdidas adicionales por difracción: sube las antenas o cambia el emplazamiento.`],
     obstruido: ['mal', 'Sin visión directa', `<b>El relieve corta la línea de visión.</b> El terreno sobresale ${f(p ? -p.despeje : 0, 1)} m por encima del rayo directo. Con este trayecto el presupuesto en espacio libre no es realista.`],
   }[an.estado];
-  v.className = `veredicto ${textos[0]}`;
+  v.className = `veredicto solo-revelado ${textos[0]}`;
   v.innerHTML = textos[2];
-  chip.className = `chip ${textos[0]}`;
+  chip.className = `chip solo-revelado ${textos[0]}`;
   chip.textContent = textos[1];
   $('#res-peor-d').textContent = p ? `${f(p.d / 1000, 2)} km desde A` : '—';
   $('#res-peor-c').textContent = p ? `${f(p.despeje, 1)} m` : '—';
@@ -381,19 +390,35 @@ function pintarFuente(p, avisos) {
 }
 
 function pintarPasos(pasos) {
+  // Se conservan abiertos los cálculos que el usuario había desplegado
+  const abiertos = new Set($$('#pasos details[open]').map((d) => d.dataset.id));
   let grupo = '';
   $('#pasos').innerHTML = pasos.map((p, i) => {
     const cab = p.grupo !== grupo ? `<h3 class="grupo">${p.grupo}</h3>` : '';
     grupo = p.grupo;
-    return `${cab}<article class="paso">
-      <h4><span class="num">${i + 1}</span><span>${p.titulo}</span></h4>
-      <div class="formula"><span class="etq">Fórmula</span><div>${p.formula}</div></div>
-      <div class="sustitucion"><span class="etq">Sustitución</span><div>${p.sustitucion}</div></div>
-      <div class="resultado"><span class="etq">Resultado</span><div>${p.resultado}</div></div>
-      ${p.nota ? `<p class="nota">${p.nota}</p>` : ''}
-    </article>`;
+    return `${cab}<details class="paso" data-id="${p.id}" ${abiertos.has(p.id) ? 'open' : ''}>
+      <summary>
+        <span class="num">${i + 1}</span>
+        <span class="paso-tit"><b>${p.titulo}</b><span class="corta">${p.corta || p.formula}</span></span>
+        <span class="paso-res oculta">${p.resultado}</span>
+        <span class="ver" aria-hidden="true"></span>
+      </summary>
+      <div class="paso-detalle">
+        ${p.datos ? `<div class="fila-det"><span class="etq">Datos</span><div>${p.datos}</div></div>` : ''}
+        <div class="fila-det formula"><span class="etq">Fórmula</span><div>${p.formula}</div></div>
+        <div class="fila-det"><span class="etq">Sustitución</span><div class="oculta izq">${p.sustitucion}</div></div>
+        <div class="fila-det resultado"><span class="etq">Resultado</span><div class="oculta izq">${p.resultado}</div></div>
+        ${p.nota ? `<p class="nota">${p.nota}</p>` : ''}
+      </div>
+    </details>`;
   }).join('');
 }
+
+function pintarFuentesBiblio() {
+  $('#fuentes-biblio').innerHTML = FUENTES_BIBLIO.map((x) => `<li><b>${esc(x.ref)}</b>. ${esc(x.titulo)}.
+    <span class="uso">${esc(x.uso)}</span>${x.url ? ` <a href="${x.url}" target="_blank" rel="noopener">${esc(x.url.replace('https://', ''))}</a>` : ''}</li>`).join('');
+}
+pintarFuentesBiblio();
 
 function pintarComprobacion() {
   const ej = EJEMPLOS[estado.ejemplo];
@@ -411,10 +436,70 @@ function pintarComprobacion() {
 }
 
 // ---------------------------------------------------------------------
+// Exportar a CSV
+// ---------------------------------------------------------------------
+function listoParaExportar(necesitaPerfil) {
+  if ($('#app').classList.contains('cargando')) { toast('Espera a que termine de descargarse el relieve del terreno.'); return false; }
+  if (!ultimoContexto) { toast('Todavía no hay resultados que exportar.'); return false; }
+  if (necesitaPerfil && !ultimoContexto.an) { toast('No hay perfil del terreno disponible para exportar.'); return false; }
+  return true;
+}
+async function exportar(tipo) {
+  const c = ultimoContexto;
+  const fecha = new Date();
+  const filas = tipo === 'perfil'
+    ? filasPerfil(c.an, c.perfil)
+    : filasInforme({ ...c, ejemplo: EJEMPLOS[estado.ejemplo]?.titulo, fecha });
+  const nombre = nombreArchivo(tipo, c.a, c.b, fecha);
+  const r = await descargar(aCSV(filas), nombre);
+  if (r !== 'cancelado') toast(`${tipo === 'perfil' ? 'Perfil' : 'Informe'} exportado: ${nombre}`);
+}
+$('#btn-csv-informe').addEventListener('click', () => { if (listoParaExportar(false)) exportar('informe'); });
+$('#btn-csv-perfil').addEventListener('click', () => { if (listoParaExportar(true)) exportar('perfil'); });
+
+// ---------------------------------------------------------------------
+// Modo ejercicio: se ocultan los resultados hasta pulsar «Comprobar»
+// ---------------------------------------------------------------------
+function ocultando() { return !!estado?.ejercicio && !revelado; }
+function aplicarModoEjercicio() {
+  const app = $('#app');
+  app.classList.toggle('ejercicio', !!estado.ejercicio);
+  app.classList.toggle('revelado', revelado);
+  $('#btn-ejercicio').setAttribute('aria-pressed', String(!!estado.ejercicio));
+  $('#btn-ejercicio').textContent = estado.ejercicio ? 'Salir del modo ejercicio' : 'Modo ejercicio';
+  $('#btn-compartir').textContent = estado.ejercicio ? 'Compartir ejercicio' : 'Compartir';
+  $('#barra-ejercicio').hidden = !estado.ejercicio;
+  $('#btn-comprobar').textContent = revelado ? 'Ocultar resultados' : 'Comprobar resultados';
+  $('#texto-ejercicio').textContent = revelado
+    ? 'Resultados visibles: compara con tus cálculos y despliega «Ver cálculo» para ver la sustitución.'
+    : 'Modo ejercicio: calcula a mano con los datos y las fórmulas, y después comprueba.';
+}
+function ponerModoEjercicio(activo) {
+  estado.ejercicio = activo;
+  revelado = false;
+  aplicarModoEjercicio();
+  recalcular();
+}
+$('#btn-ejercicio').addEventListener('click', () => {
+  ponerModoEjercicio(!estado.ejercicio);
+  toast(estado.ejercicio ? 'Modo ejercicio activado: los resultados están ocultos.' : 'Modo ejercicio desactivado.');
+});
+$('#btn-salir-ejercicio').addEventListener('click', () => ponerModoEjercicio(false));
+$('#btn-comprobar').addEventListener('click', () => {
+  revelado = !revelado;
+  aplicarModoEjercicio();
+  recalcular();
+  if (revelado) document.getElementById('s-resultados').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+// ---------------------------------------------------------------------
 // Ejemplos, compartir, instalación
 // ---------------------------------------------------------------------
 function cargarEjemplo(id) {
+  const ejercicio = !!estado.ejercicio;
   estado = copiaEjemplo(id);
+  estado.ejercicio = ejercicio;
+  revelado = false;
   perfil = null;
   aplicarEstado();
   toast(`Ejemplo cargado: ${EJEMPLOS[id].titulo}`);
@@ -424,9 +509,9 @@ $('#ejemplo').addEventListener('change', (e) => { if (e.target.value) cargarEjem
 async function compartir() {
   const url = enlaceCompartir();
   try {
-    if (navigator.share) { await navigator.share({ title: 'Radioenlace punto a punto', url }); return; }
+    if (navigator.share) { await navigator.share({ title: estado.ejercicio ? 'Ejercicio de radioenlace' : 'Radioenlace punto a punto', url }); return; }
   } catch (e) { if (e.name === 'AbortError') return; }
-  try { await navigator.clipboard.writeText(url); toast('Enlace copiado: pégalo donde quieras o conviértelo en código QR'); }
+  try { await navigator.clipboard.writeText(url); toast(estado.ejercicio ? 'Enlace del ejercicio copiado: se abrirá con los resultados ocultos.' : 'Enlace copiado: pégalo donde quieras o conviértelo en código QR'); }
   catch { $('#enlace-manual').hidden = false; $('#enlace-manual input').value = url; $('#enlace-manual input').select(); }
 }
 $('#btn-compartir').addEventListener('click', compartir);
@@ -460,6 +545,7 @@ $$('.nav a').forEach((a) => a.addEventListener('click', (e) => {
 // Arranque
 // ---------------------------------------------------------------------
 function aplicarEstado() {
+  aplicarModoEjercicio();
   escribirFormulario();
   ponerColocar(estado.colocar || 'B');
   mapa.ponerMarcador('A', estado.a, 'A');
@@ -478,4 +564,4 @@ aplicarEstado();
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* sin modo sin conexión */ });
 }
-window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, mapa };
+window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa };

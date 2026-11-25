@@ -30,12 +30,13 @@ export const MODELOS = [
     explicar({ dKm, fMHz }, res, f) {
       return {
         titulo: 'Pérdidas en espacio libre (L<sub>el</sub>)',
+        corta: 'L<sub>el</sub> = 20·log(4π·d / λ)',
         formula: 'L<sub>el</sub> = 32,45 + 20·log<sub>10</sub>(d<sub>km</sub>) + 20·log<sub>10</sub>(f<sub>MHz</sub>)',
         sustitucion:
           `L<sub>el</sub> = ${f(K_FSPL, 2)} + 20·log<sub>10</sub>(${f(dKm, 3)}) + 20·log<sub>10</sub>(${f(fMHz, 1)})` +
           ` = ${f(K_FSPL, 2)} + ${f(20 * Math.log10(dKm), 2)} + ${f(20 * Math.log10(fMHz), 2)}`,
         resultado: `${f(res.perdida, 2)} dB`,
-        nota: 'Equivale a L = 20·log<sub>10</sub>(4π·d/λ). La constante 32,45 sale de 20·log<sub>10</sub>(4π·10<sup>9</sup>/c) al expresar d en km y f en MHz. Solo considera la dispersión de la energía con la distancia: no tiene en cuenta el relieve.',
+        nota: 'Equivale a L = 20·log<sub>10</sub>(4π·d/λ) (UIT-R P.525). La constante sale de 20·log<sub>10</sub>(4π·10<sup>9</sup>/c) = 32,448 al expresar d en km y f en MHz; la UIT-R P.525 la redondea a 32,4 (diferencia de 0,05 dB). La app usa el valor exacto. Solo considera la dispersión de la energía con la distancia: no tiene en cuenta el relieve.',
       };
     },
   },
