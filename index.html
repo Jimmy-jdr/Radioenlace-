@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Radioenlace PxP</title>
+  <meta name="description" content="Planificación y estudio de radioenlaces punto a punto: perfil del terreno del IGN, zona de Fresnel, curvatura terrestre y presupuesto de enlace, paso a paso.">
+  <meta name="theme-color" content="#10222c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="iconos/icono-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Radioenlace">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <header class="cabecera">
+    <div class="marca">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M6 40 L10 14 L14 40 M34 40 L38 10 L42 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M10 14 Q24 2 38 10" fill="none" stroke="#7fd1ff" stroke-width="3"/><ellipse cx="24" cy="12" rx="14" ry="5" fill="none" stroke="#7fd1ff" stroke-width="1.5" stroke-dasharray="3 3" transform="rotate(-6 24 12)"/></svg>
+      <div>
+        <h1>Radioenlace PxP</h1>
+        <p>Perfil, Fresnel y presupuesto, paso a paso</p>
+      </div>
+    </div>
+    <div class="acciones">
+      <label class="oculto" for="ejemplo">Ejemplos</label>
+      <select id="ejemplo" class="boton-cab"></select>
+      <button type="button" id="btn-compartir" class="boton-cab">Compartir</button>
+      <button type="button" id="btn-instalar" class="boton-cab destacado" hidden>Instalar</button>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="Secciones">
+    <a href="#s-mapa">Mapa</a><a href="#s-datos">Datos</a><a href="#s-perfil">Perfil</a><a href="#s-resultados">Resultados</a><a href="#s-calculos">Cálculos</a>
+  </nav>
+
+  <main class="rejilla">
+    <div class="col col-izq">
+    <!-- 1. MAPA -->
+    <section id="s-mapa" class="tarjeta area-mapa">
+      <div class="tarjeta-cab">
+        <h2><span class="paso-n">1</span> Emplazamientos</h2>
+        <div class="colocar" role="group" aria-label="Qué emplazamiento coloca un toque en el mapa">
+          <span>Tocar el mapa coloca</span>
+          <button type="button" data-id="A" aria-pressed="false" class="pastilla-a">A</button>
+          <button type="button" data-id="B" aria-pressed="true" class="pastilla-b">B</button>
+        </div>
+      </div>
+      <div id="mapa"></div>
+      <div class="resumen-enlace">
+        <span class="extremo"><i class="pastilla-a">A</i><span id="resumen-a"></span></span>
+        <b id="resumen-distancia" class="distancia">—</b>
+        <span class="extremo"><i class="pastilla-b">B</i><span id="resumen-b"></span></span>
+      </div>
+      <p class="pista">Toca el mapa para situar el extremo elegido, o arrastra los marcadores A y B. Pellizca para ampliar.</p>
+    </section>
+
+    <!-- 3. PERFIL -->
+    <section id="s-perfil" class="tarjeta area-perfil">
+      <div class="tarjeta-cab">
+        <h2><span class="paso-n">3</span> Perfil del trayecto</h2>
+        <span id="chip-perfil" class="chip">…</span>
+      </div>
+      <div id="aviso-perfil" class="aviso-perfil" role="status" hidden></div>
+      <div id="grafico"></div>
+      <ul class="leyenda">
+        <li><i class="l-terreno"></i>Relieve + curvatura (k)</li>
+        <li><i class="l-plano"></i>Relieve sin curvatura</li>
+        <li><i class="l-los"></i>Línea de visión</li>
+        <li><i class="l-fresnel"></i>1.ª zona de Fresnel</li>
+        <li><i class="l-60"></i>Límite del 60 %</li>
+        <li><i class="l-inv"></i>Invasión del 60 %</li>
+        <li><i class="l-falta"></i>Cota que falta</li>
+      </ul>
+      <div class="rapidos">
+        <label><span>Antena A</span><input id="r-ha" type="range" min="0" max="120" step="1"><b id="v-ha"></b></label>
+        <label><span>Antena B</span><input id="r-hb" type="range" min="0" max="120" step="1"><b id="v-hb"></b></label>
+        <label><span>Frecuencia</span><input id="r-f" type="range" min="0" max="1000" step="1"><b id="v-f"></b></label>
+      </div>
+      <details class="fuente-relieve" open>
+        <summary>Fuente y resolución del relieve</summary>
+        <div id="fuente"><p class="nota">Pendiente de descarga…</p></div>
+      </details>
+    </section>
+
+    </div>
+    <div class="col col-der">
+    <!-- 2. DATOS -->
+    <section id="s-datos" class="tarjeta area-datos">
+      <div class="tarjeta-cab"><h2><span class="paso-n">2</span> Datos del enlace</h2></div>
+      <form id="formulario" autocomplete="off" onsubmit="return false">
+        <div class="tabla-sitios">
+          <span></span><span class="col-cab"><i class="pastilla-a">A</i> Transmisor</span><span class="col-cab"><i class="pastilla-b">B</i> Receptor</span>
+
+          <label for="a-nombre">Nombre</label>
+          <div class="campo"><input id="a-nombre" type="text" maxlength="60"></div>
+          <div class="campo"><input id="b-nombre" type="text" maxlength="60" aria-label="Nombre de B"></div>
+
+          <label for="a-lat">Latitud (°)</label>
+          <div class="campo"><input id="a-lat" type="text" enterkeyhint="done"><small class="error"></small></div>
+          <div class="campo"><input id="b-lat" type="text" enterkeyhint="done" aria-label="Latitud de B (grados)"><small class="error"></small></div>
+
+          <label for="a-lon">Longitud (°)</label>
+          <div class="campo"><input id="a-lon" type="text" enterkeyhint="done"><small class="error"></small></div>
+          <div class="campo"><input id="b-lon" type="text" enterkeyhint="done" aria-label="Longitud de B (grados)"><small class="error"></small></div>
+
+          <span class="etq-fila">Cota del terreno</span>
+          <output id="a-cota" class="dato">—</output>
+          <output id="b-cota" class="dato">—</output>
+
+          <label for="a-h">Altura antena (m)</label>
+          <div class="campo"><input id="a-h" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
+          <div class="campo"><input id="b-h" type="text" inputmode="decimal" enterkeyhint="done" aria-label="Altura de la antena B (m)"><small class="error"></small></div>
+
+          <label for="a-g">Ganancia (dBi)</label>
+          <div class="campo"><input id="a-g" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
+          <div class="campo"><input id="b-g" type="text" inputmode="decimal" enterkeyhint="done" aria-label="Ganancia de la antena B (dBi)"><small class="error"></small></div>
+
+          <label for="a-l">Pérdidas (dB)</label>
+          <div class="campo"><input id="a-l" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
+          <div class="campo"><input id="b-l" type="text" inputmode="decimal" enterkeyhint="done" aria-label="Pérdidas del lado B (dB)"><small class="error"></small></div>
+        </div>
+
+        <div class="fila-distancia">
+          <div class="campo">
+            <label for="distancia">Distancia A–B (km)</label>
+            <input id="distancia" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small>
+          </div>
+          <div class="dato-lado"><span>Rumbo A→B</span><b id="rumbo">—</b></div>
+        </div>
+
+        <div class="rejilla-radio">
+          <div class="campo">
+            <label for="f-valor">Frecuencia</label>
+            <div class="con-unidad"><input id="f-valor" type="text" inputmode="decimal" enterkeyhint="done">
+              <select id="f-unidad" aria-label="Unidad de frecuencia"><option>MHz</option><option>GHz</option></select></div>
+            <small class="error"></small>
+          </div>
+          <div class="campo">
+            <label for="p-valor">Potencia de transmisión</label>
+            <div class="con-unidad"><input id="p-valor" type="text" enterkeyhint="done">
+              <select id="p-unidad" aria-label="Unidad de potencia"><option>W</option><option>dBm</option></select></div>
+            <small class="error"></small>
+          </div>
+          <div class="campo">
+            <label for="sens">Sensibilidad del receptor (dBm)</label>
+            <input id="sens" type="text" enterkeyhint="done"><small class="error"></small>
+          </div>
+          <div class="campo">
+            <label for="k">Factor k (curvatura)</label>
+            <select id="k">
+              <option value="4/3">4/3 · atmósfera estándar</option>
+              <option value="1">1 · Tierra real</option>
+              <option value="2/3">2/3 · subrefracción</option>
+              <option value="inf">∞ · Tierra plana</option>
+              <option value="otro">Otro valor…</option>
+            </select>
+          </div>
+          <div class="campo" id="k-otro-campo" hidden>
+            <label for="k-otro">Valor de k</label>
+            <input id="k-otro" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small>
+          </div>
+          <div class="campo">
+            <label for="terreno">Relieve</label>
+            <select id="terreno">
+              <option value="ign">Real · MDT del IGN/CNIG</option>
+              <option value="plano">Plano teórico (ejercicios)</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="modelo">Modelo de propagación</label>
+            <select id="modelo"></select>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- 4. RESULTADOS -->
+    <section id="s-resultados" class="area-res">
+      <article class="tarjeta resultado">
+        <div class="tarjeta-cab"><h2><span class="paso-n">4</span> Presupuesto en espacio libre</h2></div>
+        <dl class="cifras">
+          <div><dt>Potencia transmitida</dt><dd id="res-ptx">—</dd></div>
+          <div><dt>PIRE</dt><dd id="res-pire">—</dd></div>
+          <div><dt>Pérdidas en espacio libre</dt><dd id="res-perdida">—</dd></div>
+          <div class="grande"><dt>Potencia recibida</dt><dd id="res-prx">—</dd></div>
+          <div class="grande"><dt>Margen sobre la sensibilidad</dt><dd id="res-margen">—</dd></div>
+        </dl>
+        <div id="barra-margen" class="barra" aria-hidden="true"><span></span></div>
+        <p id="veredicto-presupuesto" class="veredicto"></p>
+      </article>
+      <article class="tarjeta resultado">
+        <div class="tarjeta-cab"><h2><span class="paso-n">5</span> Despeje de Fresnel</h2></div>
+        <dl class="cifras">
+          <div><dt>Punto más comprometido</dt><dd id="res-peor-d">—</dd></div>
+          <div><dt>Despeje sobre el relieve</dt><dd id="res-peor-c">—</dd></div>
+          <div><dt>Radio r₁ en ese punto</dt><dd id="res-peor-r1">—</dd></div>
+          <div class="grande"><dt>Despeje / r₁</dt><dd id="res-peor-pct">—</dd></div>
+          <div><dt>r₁ en el punto medio</dt><dd id="res-r1-medio">—</dd></div>
+          <div><dt>Flecha de la Tierra en el centro</dt><dd id="res-flecha">—</dd></div>
+        </dl>
+        <p id="veredicto-fresnel" class="veredicto"></p>
+      </article>
+    </section>
+
+    </div>
+    <!-- 5. CÁLCULOS -->
+    <section id="s-calculos" class="tarjeta area-calc">
+      <div class="tarjeta-cab"><h2><span class="paso-n">6</span> Cálculos paso a paso</h2></div>
+      <div id="enunciado" class="enunciado" hidden><h3 id="enunciado-titulo"></h3><p id="enunciado-texto"></p></div>
+      <div id="comprobacion" class="comprobacion" hidden></div>
+      <div id="pasos"></div>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
+    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión 1.0 · espacio libre y Fresnel. Próximamente: Longley–Rice y mapas de cobertura.</p>
+  </footer>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="ayuda-ios" class="hoja" hidden>
+  <div>
+    <h3>Añadir a la pantalla de inicio</h3>
+    <ol>
+      <li>Toca el botón <b>Compartir</b> de Safari (el cuadrado con la flecha hacia arriba).</li>
+      <li>Elige <b>Añadir a pantalla de inicio</b>.</li>
+      <li>Pulsa <b>Añadir</b>. La app se abrirá a pantalla completa.</li>
+    </ol>
+    <button type="button" class="boton">Entendido</button>
+  </div>
+</div>
+<div id="enlace-manual" class="hoja" hidden>
+  <div><h3>Copia este enlace</h3><input type="text" readonly aria-label="Enlace para compartir"><button type="button" class="boton" onclick="this.closest('.hoja').hidden=true">Cerrar</button></div>
+</div>
+<noscript><p style="padding:1em">Esta aplicación necesita JavaScript.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
