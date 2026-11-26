@@ -138,5 +138,43 @@ export function construirPasos(ctx, f) {
       nota: 'y<sub>A</sub> e y<sub>B</sub> son las cotas de las antenas sobre el nivel del mar (cota del terreno + altura del mástil). El punto más comprometido es el de menor relación c/r<sub>1</sub> a lo largo del trayecto; si es negativa, el relieve corta la línea de visión. El criterio del 60 % es el límite a partir del cual la UIT-R P.526 considera despreciable la difracción (pérdida ≈ 0 dB). Para diseñar enlaces reales, la UIT-R P.530 aplica criterios más exigentes: 100 % de r<sub>1</sub> con k = 4/3 y un despeje mínimo con el k más desfavorable.',
     });
   }
+
+  const dif = ctx.dif;
+  if (p && dif) {
+    const d1 = dif.d1, d2 = dif.d2;
+    pasos.push({
+      grupo: 'Difracción en el obstáculo principal',
+      id: 'nu',
+      titulo: 'Parámetro de difracción (ν)',
+      corta: 'ν = h·√(2·(d<sub>1</sub>+d<sub>2</sub>) / (λ·d<sub>1</sub>·d<sub>2</sub>))',
+      datos: `Obstáculo en el punto más comprometido: d<sub>1</sub> = ${f(d1 / 1000, 3)} km, d<sub>2</sub> = ${f(d2 / 1000, 3)} km; h = −c = ${f(dif.h, 2)} m`,
+      formula: 'ν = h·√( 2·(d<sub>1</sub> + d<sub>2</sub>) / (λ·d<sub>1</sub>·d<sub>2</sub>) )',
+      sustitucion: `ν = ${f(dif.h, 2)} m · √( 2 · (${f(d1, 1)} m + ${f(d2, 1)} m) / (${f(lam, 4)} m · ${f(d1, 1)} m · ${f(d2, 1)} m) )`,
+      resultado: `ν = ${f(dif.nu, 3)}`,
+      nota: 'h es la altura de la cima del obstáculo (relieve + curvatura) sobre la línea de visión: positiva si la corta y negativa si queda por debajo, es decir, h = −c. Es la ecuación (26) de la UIT-R P.526. Como r<sub>1</sub>² = λ·d<sub>1</sub>·d<sub>2</sub>/(d<sub>1</sub>+d<sub>2</sub>), también vale ν = −√2·c/r<sub>1</sub>: con el 60 % de despeje, ν ≈ −0,85.',
+    });
+    pasos.push({
+      grupo: 'Difracción en el obstáculo principal',
+      id: 'difraccion',
+      titulo: 'Pérdida por difracción en filo de cuchillo (J)',
+      corta: 'J(ν) = 6,9 + 20·log(√((ν−0,1)²+1) + ν − 0,1)',
+      formula: 'J(ν) = 6,9 + 20·log<sub>10</sub>( √((ν − 0,1)² + 1) + ν − 0,1 )   si ν > −0,78;   J = 0 dB en otro caso',
+      sustitucion: dif.nu > -0.78
+        ? `J = 6,9 + 20·log<sub>10</sub>( √((${f(dif.nu, 3)} − 0,1)² + 1) + ${f(dif.nu, 3)} − 0,1 )`
+        : `ν = ${f(dif.nu, 3)} ≤ −0,78 → el obstáculo queda fuera de la zona que produce pérdidas apreciables`,
+      resultado: `J = ${f(dif.J, 2)} dB`,
+      nota: 'Ecuación (31) de la UIT-R P.526 para un único obstáculo agudo («filo de cuchillo»); difiere menos de 0,15 dB del cálculo exacto con integrales de Fresnel. Es una estimación de primer orden: un obstáculo redondeado o varios obstáculos seguidos producen más pérdida (métodos de Deygout o Bullington, también en la P.526). Con ν = 0 (rasante) J ≈ 6 dB.',
+    });
+    pasos.push({
+      grupo: 'Difracción en el obstáculo principal',
+      id: 'margendif',
+      titulo: 'Margen corregido con la difracción (M<sub>d</sub>)',
+      corta: 'M<sub>d</sub> = M − J',
+      formula: 'P<sub>rx,d</sub> = P<sub>rx</sub> − J ;  M<sub>d</sub> = M − J',
+      sustitucion: `P<sub>rx,d</sub> = ${f(pres.prx, 2)} dBm − ${f(dif.J, 2)} dB ;  M<sub>d</sub> = ${f(pres.margen, 2)} dB − ${f(dif.J, 2)} dB`,
+      resultado: `P<sub>rx,d</sub> = ${f(pres.prx - dif.J, 2)} dBm ;  M<sub>d</sub> = ${f(pres.margen - dif.J, 2)} dB`,
+      nota: 'La difracción se suma a las pérdidas en espacio libre: L<sub>total</sub> = L<sub>el</sub> + J. Si el trayecto está despejado (≥ 60 % de r<sub>1</sub>), J = 0 y el margen no cambia.',
+    });
+  }
   return pasos;
 }

@@ -12,8 +12,9 @@
 // =====================================================================
 import { R_TIERRA_KM, rumbo, dbmAW } from './radio.js';
 import { FUENTES_BIBLIO } from './fuentes.js';
+import { evaluarEnlace } from './veredicto.js';
 
-export const VERSION = '1.0.9';
+export const VERSION = '1.1.0';
 const SEP = ';';
 const FIN = '\r\n';
 
@@ -142,7 +143,8 @@ export function filasInforme(ctx) {
   filas.push(fila(P, 'Potencia recibida (P_rx)', F('prx'), S('prx'), num(pres.prx, 2), 'dBm'));
   filas.push(fila(P, 'Margen respecto a la sensibilidad (M)', F('margen'), S('margen'), num(pres.margen, 2), 'dB'));
   filas.push(fila(P, 'Evaluación del presupuesto', 'M ≥ 0 dB', `M = ${numT(pres.margen, 2)} dB`,
-    pres.margen >= 0 ? 'Suficiente: la señal supera la sensibilidad' : 'Insuficiente: no alcanza la sensibilidad', '', false));
+    pres.margen < 0 ? 'Insuficiente: no alcanza la sensibilidad'
+      : (an && an.estado !== 'despejado' ? 'Suficiente solo en espacio libre: el trayecto no está despejado (ver difracción)' : 'Suficiente: la señal supera la sensibilidad'), '', false));
 
   // 6. Despeje de Fresnel
   if (an) {
@@ -175,7 +177,20 @@ export function filasInforme(ctx) {
     an.invasiones.forEach((t, i) => filas.push(fila(R, `Tramo invadido ${i + 1}`, '', '',
       `${numT(t.desde / 1000, 3)} a ${numT(t.hasta / 1000, 3)} km desde A${t.obstruye ? ' (corta la línea de visión)' : ''}`, '', false)));
   }
-  // 7. Fuentes
+  // 7. Difracción en el obstáculo principal y evaluación global
+  const dif = ctx.dif;
+  if (an && an.peor && dif) {
+    const G = 'Difracción (filo de cuchillo)';
+    filas.push(fila(G, 'Altura del obstáculo sobre la línea de visión (h = −c)', 'h = −c', `h = −(${numT(an.peor.despeje, 2)})`, num(dif.h, 2), 'm'));
+    filas.push(fila(G, 'Parámetro de difracción (ν)', F('nu'), S('nu'), num(dif.nu, 4), ''));
+    filas.push(fila(G, 'Pérdida por difracción (J)', F('difraccion'), S('difraccion'), num(dif.J, 2), 'dB'));
+    filas.push(fila(G, 'Potencia recibida con difracción (P_rx,d)', 'P_rx,d = P_rx − J', `P_rx,d = ${numT(pres.prx, 2)} − ${numT(dif.J, 2)}`, num(pres.prx - dif.J, 2), 'dBm'));
+    filas.push(fila(G, 'Margen con difracción (M_d)', 'M_d = M − J', `M_d = ${numT(pres.margen, 2)} − ${numT(dif.J, 2)}`, num(pres.margen - dif.J, 2), 'dB'));
+  }
+  const ev = evaluarEnlace(pres, an, dif);
+  filas.push(fila('Evaluación global', ev.titulo, '', '', ev.texto, '', false));
+
+  // 8. Fuentes
   for (const x of FUENTES_BIBLIO) filas.push(fila('Fuentes', `${x.ref}. ${x.titulo}`, x.uso, '', x.url, '', false));
   return filas;
 }
@@ -216,14 +231,14 @@ export function nombreArchivo(tipo, a, b, fecha = new Date()) {
   return `radioenlace_${tipo}_${limpiar(a.nombre)}-${limpiar(b.nombre)}_${d}.csv`;
 }
 
-export async function descargar(texto, nombre) {
-  const blob = new Blob([texto], { type: 'text/csv;charset=utf-8' });
+export async function descargar(contenido, nombre, tipo = 'text/csv;charset=utf-8') {
+  const blob = new Blob([contenido], { type: tipo });
   // En la app instalada en iPhone/iPad la descarga directa no siempre está
   // disponible: se usa el menú Compartir (Guardar en Archivos, Mail…).
   const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (instalada && esIOS && typeof File === 'function' && navigator.canShare) {
-    const archivo = new File([blob], nombre, { type: 'text/csv' });
+    const archivo = new File([blob], nombre, { type: tipo.split(';')[0] });
     if (navigator.canShare({ files: [archivo] })) {
       try { await navigator.share({ files: [archivo], title: nombre }); return 'compartido'; }
       catch (err) { if (err.name === 'AbortError') return 'cancelado'; }

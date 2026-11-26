@@ -3,8 +3,8 @@
 // mapa.js — Mapa táctil ligero (sin librerías externas)
 // Teselas en proyección Web Mercator (WMTS GoogleMapsCompatible / XYZ).
 // Gestos: arrastrar para desplazar, pellizcar para ampliar, rueda del
-// ratón, botones + y −. Tocar el mapa coloca un emplazamiento y los
-// marcadores A y B se pueden arrastrar.
+// ratón, botones + y −. Tocar el mapa mueve el emplazamiento elegido (A o B)
+// y solo ese marcador se puede arrastrar; con «Ninguno» no se mueve nada.
 // =====================================================================
 const T = 256;
 
@@ -32,6 +32,8 @@ export const CAPAS = [
 
 export class Mapa {
   constructor(el, { centro, zoom = 11, alTocar, alArrastrarMarcador, alSoltarMarcador } = {}) {
+    this.editable = null;  // id del único marcador que se puede arrastrar (null: ninguno)
+    this.encuadrePendiente = null;
     this.el = el;
     this.centro = { ...centro };
     this.zoom = zoom;
@@ -88,7 +90,11 @@ export class Mapa {
     }, { passive: false });
     // Evita el zoom de página por gestos en Safari
     el.addEventListener('gesturestart', (e) => e.preventDefault());
-    new ResizeObserver(() => this.dibujar()).observe(el);
+    new ResizeObserver(() => {
+      // Un encuadre pedido con el mapa oculto (otra pestaña) se aplica al mostrarlo
+      if (this.encuadrePendiente && el.clientWidth > 0) { const [p, m] = this.encuadrePendiente; this.encuadrePendiente = null; this.encuadrar(p, m); }
+      else this.dibujar();
+    }).observe(el);
     this.ponerCapa(this.capa.id);
   }
 
@@ -124,7 +130,9 @@ export class Mapa {
   }
 
   encuadrar(puntos, margen = 30) {
-    const W = this.el.clientWidth || 300, H = this.el.clientHeight || 300;
+    if (!this.el.clientWidth) { this.encuadrePendiente = [puntos, margen]; return; }
+    this.encuadrePendiente = null;
+    const W = this.el.clientWidth, H = this.el.clientHeight || 300;
     let z = this.max;
     for (; z > this.min; z -= 0.25) {
       const ps = puntos.map((p) => proyectar(p.lat, p.lon, z));
@@ -141,6 +149,15 @@ export class Mapa {
     this.dibujar();
   }
 
+  // Marca qué marcador se puede arrastrar (A, B o null)
+  ponerEditable(id) {
+    this.editable = id;
+    for (const [k, m] of this.marcadores) {
+      m.el.classList.toggle('editable', k === id);
+      m.el.classList.toggle('fijo', k !== id);
+    }
+  }
+
   ponerMarcador(id, pos, etiqueta) {
     let m = this.marcadores.get(id);
     if (!m) {
@@ -153,6 +170,7 @@ export class Mapa {
       this.capaMarcadores.appendChild(el);
       m = { el, pos };
       this.marcadores.set(id, m);
+      this.ponerEditable(this.editable);
     }
     m.pos = { ...pos };
     this.dibujar();
@@ -232,8 +250,10 @@ export class Mapa {
     const p = this.#local(e);
     this.punteros.set(e.pointerId, p);
     const marcador = e.target.closest?.('.mapa-marcador');
+    // Solo se arrastra el marcador elegido; sobre los demás el gesto desplaza el mapa
+    const arrastrable = marcador && marcador.dataset.id === this.editable;
     if (this.punteros.size === 1) {
-      this.gesto = { tipo: marcador ? 'marcador' : 'mover', id: marcador?.dataset.id, inicio: p, ultimo: p, t: Date.now(), movido: false };
+      this.gesto = { tipo: arrastrable ? 'marcador' : 'mover', id: marcador?.dataset.id, inicio: p, ultimo: p, t: Date.now(), movido: false };
     } else if (this.punteros.size === 2) {
       const [a, b] = [...this.punteros.values()];
       this.gesto = { tipo: 'pellizco', dist: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom, movido: true };

@@ -152,6 +152,27 @@ export function analizarPerfil({ perfil, hA, hB, fMHz, k, despejeMinimo = 0.6 })
   };
 }
 
+// ---------- Difracción en filo de cuchillo (UIT-R P.526, § 4.1) ----------
+// h: altura del obstáculo sobre la línea de visión (m; negativa si queda por debajo)
+// ν = h·√(2·(d1 + d2) / (λ·d1·d2))                         (ec. 26)
+// J(ν) = 6,9 + 20·log(√((ν − 0,1)² + 1) + ν − 0,1) dB, para ν > −0,78   (ec. 31)
+export function parametroNu(h, d1, d2, fMHz) {
+  if (d1 <= 0 || d2 <= 0) return -Infinity;
+  return h * Math.sqrt((2 * (d1 + d2)) / (longitudOnda(fMHz) * d1 * d2));
+}
+export function perdidaFiloCuchillo(nu) {
+  if (!(nu > -0.78)) return 0;
+  return 6.9 + 20 * Math.log10(Math.sqrt((nu - 0.1) ** 2 + 1) + nu - 0.1);
+}
+// Aplica el método al punto más comprometido del perfil analizado
+export function difraccionObstaculoPrincipal(an, fMHz) {
+  const p = an?.peor;
+  if (!p) return null;
+  const h = -p.despeje, d1 = p.d, d2 = an.D - p.d;
+  const nu = parametroNu(h, d1, d2, fMHz);
+  return { h, d1, d2, nu, J: perdidaFiloCuchillo(nu), punto: p };
+}
+
 // Lectura de números escritos con coma o punto decimal
 export function leerNumero(texto) {
   if (typeof texto === 'number') return texto;

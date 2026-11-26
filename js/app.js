@@ -10,6 +10,8 @@ import { GraficoPerfil } from './perfil.js';
 import { construirPasos } from './explicacion.js';
 import { EJEMPLOS } from './ejemplos.js';
 import { filasInforme, filasPerfil, aCSV, nombreArchivo, descargar } from './informe.js';
+import { generarPDF, generarDXFPerfil, generarDXFPlanta, generarKML, nombrePlano } from './planos.js';
+import { evaluarEnlace } from './veredicto.js';
 import { FUENTES_BIBLIO } from './fuentes.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -33,11 +35,13 @@ let temporizador = 0;
 let ultimoCalculo = null;
 let ultimoContexto = null;  // lo que se exporta a CSV
 let revelado = false;       // modo ejercicio: resultados visibles tras «Comprobar»
+let avisoNinguno = false;   // aviso único al tocar el mapa con «Ninguno»
 
 function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
   return JSON.parse(JSON.stringify({
-    ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'B',
+    ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'ninguno',
+    plano: { formato: 'A4', exag: 10 },
   }));
 }
 
@@ -56,7 +60,11 @@ function estadoInicial() {
 function validar(s) {
   const base = copiaEjemplo('talavera');
   if (!s || !s.a || !s.b || !isFinite(s.a.lat) || !isFinite(s.b.lat)) return base;
-  return { ...base, ...s, a: { ...base.a, ...s.a }, b: { ...base.b, ...s.b }, f: { ...base.f, ...s.f }, p: { ...base.p, ...s.p } };
+  const r = { ...base, ...s, a: { ...base.a, ...s.a }, b: { ...base.b, ...s.b }, f: { ...base.f, ...s.f }, p: { ...base.p, ...s.p }, plano: { ...base.plano, ...s.plano } };
+  if (!['A', 'B', 'ninguno'].includes(r.colocar)) r.colocar = 'ninguno';
+  if (!['A4', 'A3'].includes(r.plano.formato)) r.plano.formato = 'A4';
+  if (![1, 5, 10, 20].includes(+r.plano.exag)) r.plano.exag = 10;
+  return r;
 }
 
 function guardar() {
@@ -87,11 +95,13 @@ const mapa = new Mapa($('#mapa'), {
   centro: { lat: 40.05, lon: -4.79 },
   zoom: 11,
   alTocar: (geo, idMarcador) => {
-    if (idMarcador) { ponerColocar(idMarcador); return; }
-    const id = estado.colocar;
-    moverSitio(id, geo, true);
-    // tras colocar un extremo se propone colocar el otro
-    ponerColocar(id === 'A' ? 'B' : 'A');
+    // Solo se mueve el punto elegido en «Mover»; la selección no cambia sola
+    if (estado.colocar !== 'A' && estado.colocar !== 'B') {
+      if (!avisoNinguno) { avisoNinguno = true; toast('Para mover un punto, elige A o B en «Mover» y toca el mapa.'); }
+      return;
+    }
+    if (idMarcador) return; // tocar un marcador no lo mueve
+    moverSitio(estado.colocar, geo, true);
   },
   alArrastrarMarcador: (id, geo) => moverSitio(id, geo, false),
   alSoltarMarcador: (id, geo) => moverSitio(id, geo, true),
@@ -225,6 +235,8 @@ $('#r-f').addEventListener('input', (e) => {
 function ponerColocar(id) {
   estado.colocar = id;
   $$('.colocar button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === id)));
+  mapa.ponerEditable(id === 'A' || id === 'B' ? id : null);
+  guardar();
 }
 $$('.colocar button').forEach((b) => b.addEventListener('click', () => ponerColocar(b.dataset.id)));
 
@@ -298,7 +310,6 @@ function recalcular() {
   const modelo = obtenerModelo(estado.modelo);
   const resModelo = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: perfil?.puntos });
   const pres = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: resModelo.perdida, sensibilidad: e.sens });
-  pintarPresupuesto(e, resModelo, pres);
 
   // El perfil solo vale si corresponde a los emplazamientos actuales
   const vigente = perfil && perfil.puntos.length > 1 &&
@@ -308,40 +319,86 @@ function recalcular() {
     (perfil.fuente.id === 'plano') === (estado.terreno === 'plano');
   const base = { e, a: { ...estado.a }, b: { ...estado.b }, dKm, modelo, resModelo, pres };
   if (!vigente) {
-    ultimoContexto = { ...base, an: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
+    pintarPresupuesto(e, resModelo, pres, null);
+    pintarDifraccion(pres, null, null);
+    pintarResumen(resModelo, pres, null, null);
+    ultimoContexto = { ...base, an: null, dif: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
     return; // el perfil llegará al terminar la descarga en curso
   }
 
   analisis = R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k: e.k });
+  const dif = R.difraccionObstaculoPrincipal(analisis, e.fMHz);
   grafico.pintar(analisis, { ocultar: ocultando() });
+  pintarPresupuesto(e, resModelo, pres, analisis);
   pintarFresnel(analisis);
+  pintarDifraccion(pres, analisis, dif);
+  pintarResumen(resModelo, pres, analisis, dif);
   pintarFuente(perfil, perfil.avisos);
   $('#a-cota').textContent = `${f(analisis.zA, 1)} m`;
   $('#b-cota').textContent = `${f(analisis.zB, 1)} m`;
   mapa.ponerPuntoCritico(analisis.peor && !ocultando() ? { lat: analisis.peor.lat, lon: analisis.peor.lon } : null, analisis.estado);
 
-  const pasos = construirPasos({ e, a: estado.a, b: estado.b, dKm, modelo, resModelo, pres, an: analisis }, f);
+  const ctx = { ...base, an: analisis, dif };
+  const pasos = construirPasos(ctx, f);
   pintarPasos(pasos);
   ultimoCalculo = { perdida: resModelo.perdida, prx: pres.prx, margen: pres.margen, r1Medio: analisis.r1Medio };
-  ultimoContexto = { ...base, an: analisis, perfil, pasos };
+  ultimoContexto = { ...ctx, perfil, pasos };
   pintarComprobacion();
 }
 
-function pintarPresupuesto(e, res, pres) {
+function pintarPresupuesto(e, res, pres, an) {
   const ok = pres.margen >= 0;
+  const libre = !an || an.estado === 'despejado';
   $('#res-perdida').textContent = `${f(res.perdida, 1)} dB`;
   $('#res-pire').textContent = `${f(pres.pire, 1)} dBm`;
   $('#res-prx').textContent = `${f(pres.prx, 1)} dBm`;
   $('#res-margen').textContent = `${f(pres.margen, 1)} dB`;
   $('#res-ptx').textContent = `${f(e.ptxDbm, 2)} dBm`;
   const v = $('#veredicto-presupuesto');
-  v.className = `veredicto solo-revelado ${ok ? 'bien' : 'mal'}`;
-  v.innerHTML = ok
-    ? `<b>Nivel suficiente en espacio libre.</b> La señal recibida supera la sensibilidad en ${f(pres.margen, 1)} dB.`
-    : `<b>Nivel insuficiente.</b> Faltan ${f(-pres.margen, 1)} dB para alcanzar la sensibilidad del receptor.`;
+  const clase = !ok ? 'mal' : libre ? 'bien' : 'aviso';
+  v.className = `veredicto solo-revelado ${clase}`;
+  v.innerHTML = !ok
+    ? `<b>Nivel insuficiente.</b> Faltan ${f(-pres.margen, 1)} dB para alcanzar la sensibilidad del receptor, incluso en espacio libre.`
+    : libre
+      ? `<b>Nivel suficiente en espacio libre.</b> La señal recibida supera la sensibilidad en ${f(pres.margen, 1)} dB.`
+      : `<b>Suficiente solo en espacio libre.</b> Este margen de ${f(pres.margen, 1)} dB supone el trayecto despejado, pero el relieve ${an.estado === 'obstruido' ? 'corta la línea de visión' : 'invade la 1.ª zona de Fresnel'}. Mira la difracción.`;
   const barra = Math.max(0, Math.min(100, ((pres.prx - e.sens + 20) / 100) * 100));
   $('#barra-margen').style.setProperty('--valor', `${barra}%`);
-  $('#barra-margen').className = `barra solo-revelado ${ok ? 'bien' : 'mal'}`;
+  $('#barra-margen').className = `barra solo-revelado ${clase}`;
+}
+
+function pintarDifraccion(pres, an, dif) {
+  const hay = an && dif;
+  $('#res-dif-h').textContent = hay ? `${f(dif.h, 1)} m` : '—';
+  $('#res-dif-nu').textContent = hay ? f(dif.nu, 2) : '—';
+  $('#res-dif-j').textContent = hay ? `${f(dif.J, 1)} dB` : '—';
+  $('#res-dif-prx').textContent = hay ? `${f(pres.prx - dif.J, 1)} dBm` : '—';
+  $('#res-dif-margen').textContent = hay ? `${f(pres.margen - dif.J, 1)} dB` : '—';
+  const ev = evaluarEnlace(pres, an, dif, f);
+  const v = $('#veredicto-global');
+  v.className = `veredicto solo-revelado ${ev.nivel === 'pendiente' ? '' : ev.nivel}`;
+  v.innerHTML = `<b>${esc(ev.titulo)}.</b> ${esc(ev.texto)}`;
+}
+
+// Tira de resumen de la pestaña «Enlace»: cifras clave y estado con color
+function pintarResumen(res, pres, an, dif) {
+  const ev = evaluarEnlace(pres, an, dif, f);
+  const J = ev.J;
+  const caja = $('#sum-veredicto');
+  caja.className = `veredicto-global solo-revelado ${ev.nivel === 'pendiente' ? '' : ev.nivel}`;
+  $('#sum-titulo').textContent = ev.titulo;
+  $('#sum-texto').textContent = ev.texto;
+  $('#sum-perdidas').textContent = `${f(res.perdida + J, 1)} dB`;
+  $('#sum-prx').textContent = `${f(pres.prx - J, 1)} dBm`;
+  const m = $('#sum-margen');
+  m.textContent = `${f(ev.margenCorregido, 1)} dB`;
+  m.className = `oculta ${ev.margenCorregido < 0 ? 'mal' : ''}`;
+  const d = $('#sum-despeje');
+  d.textContent = an?.peor ? `${f(an.peor.relacion * 100, 0)} % de r₁` : '—';
+  d.className = `oculta ${an ? { despejado: '', fresnel: 'aviso', obstruido: 'mal' }[an.estado] : ''}`;
+  $('#sum-nota').textContent = !an ? 'Esperando el perfil del terreno.'
+    : J > 0 ? `Incluye la pérdida por difracción estimada del obstáculo principal (J = ${f(J, 1)} dB, UIT-R P.526). En espacio libre serían ${f(res.perdida, 1)} dB de pérdidas y ${f(pres.margen, 1)} dB de margen.`
+      : 'Trayecto despejado: las pérdidas son las de espacio libre.';
 }
 
 function pintarFresnel(an) {
@@ -350,8 +407,8 @@ function pintarFresnel(an) {
   const chip = $('#chip-perfil');
   const textos = {
     despejado: ['bien', 'Despejado', `<b>Trayecto despejado.</b> En el punto más comprometido queda libre el ${f(p ? p.relacion * 100 : 100, 0)}&nbsp;% del radio de la 1.ª zona de Fresnel (se exige ≥ 60&nbsp;%).`],
-    fresnel: ['aviso', 'Fresnel invadido', `<b>El relieve invade la 1.ª zona de Fresnel.</b> Hay visión directa, pero solo queda libre el ${f(p ? p.relacion * 100 : 0, 0)}&nbsp;% de r₁ (se exige ≥ 60&nbsp;%). Habrá pérdidas adicionales por difracción: sube las antenas o cambia el emplazamiento.`],
-    obstruido: ['mal', 'Sin visión directa', `<b>El relieve corta la línea de visión.</b> El terreno sobresale ${f(p ? -p.despeje : 0, 1)} m por encima del rayo directo. Con este trayecto el presupuesto en espacio libre no es realista.`],
+    fresnel: ['aviso', 'Fresnel invadido', `<b>El relieve invade la 1.ª zona de Fresnel.</b> Hay visión directa, pero solo queda libre el ${f(p ? p.relacion * 100 : 0, 0)}&nbsp;% de r₁ (se exige ≥ 60&nbsp;%). Hay pérdidas adicionales por difracción: sube las antenas o cambia el emplazamiento.`],
+    obstruido: ['mal', 'Sin visión directa', `<b>El relieve corta la línea de visión.</b> El terreno sobresale ${f(p ? -p.despeje : 0, 1)} m por encima del rayo directo. El margen en espacio libre no es válido: se estima la pérdida por difracción.`],
   }[an.estado];
   v.className = `veredicto solo-revelado ${textos[0]}`;
   v.innerHTML = textos[2];
@@ -439,6 +496,7 @@ function pintarComprobacion() {
 // Exportar a CSV
 // ---------------------------------------------------------------------
 function listoParaExportar(necesitaPerfil) {
+  if (ocultando()) { toast('En modo ejercicio, pulsa antes «Comprobar resultados».'); return false; }
   if ($('#app').classList.contains('cargando')) { toast('Espera a que termine de descargarse el relieve del terreno.'); return false; }
   if (!ultimoContexto) { toast('Todavía no hay resultados que exportar.'); return false; }
   if (necesitaPerfil && !ultimoContexto.an) { toast('No hay perfil del terreno disponible para exportar.'); return false; }
@@ -458,6 +516,30 @@ $('#btn-csv-informe').addEventListener('click', () => { if (listoParaExportar(fa
 $('#btn-csv-perfil').addEventListener('click', () => { if (listoParaExportar(true)) exportar('perfil'); });
 
 // ---------------------------------------------------------------------
+// Exportar planos: PDF (lámina), DXF (CAD) y KML (Google Earth)
+// ---------------------------------------------------------------------
+const PLANOS = {
+  pdf: { tipo: 'plano', ext: 'pdf', mime: 'application/pdf', texto: 'Plano PDF', crear: (c) => generarPDF(c, { formato: estado.plano.formato, exag: +estado.plano.exag }) },
+  'dxf-perfil': { tipo: 'perfil', ext: 'dxf', mime: 'application/dxf', texto: 'Perfil DXF', crear: (c) => generarDXFPerfil(c, +estado.plano.exag) },
+  'dxf-planta': { tipo: 'planta_UTM', ext: 'dxf', mime: 'application/dxf', texto: 'Planta DXF', crear: (c) => generarDXFPlanta(c) },
+  kml: { tipo: 'enlace', ext: 'kml', mime: 'application/vnd.google-earth.kml+xml', texto: 'KML', crear: (c) => generarKML(c) },
+};
+async function exportarPlano(id) {
+  if (!listoParaExportar(true)) return;
+  const def = PLANOS[id];
+  try {
+    const nombre = nombrePlano(def.tipo, def.ext, ultimoContexto.a, ultimoContexto.b);
+    const r = await descargar(def.crear(ultimoContexto), nombre, def.mime);
+    if (r !== 'cancelado') toast(`${def.texto} exportado: ${nombre}`);
+  } catch (err) {
+    toast(`No se pudo generar el archivo: ${err.message}`);
+  }
+}
+for (const id of Object.keys(PLANOS)) $(`#btn-${id}`).addEventListener('click', () => exportarPlano(id));
+$('#pl-formato').addEventListener('change', (e) => { estado.plano.formato = e.target.value; guardar(); });
+$('#pl-exag').addEventListener('change', (e) => { estado.plano.exag = +e.target.value; guardar(); });
+
+// ---------------------------------------------------------------------
 // Modo ejercicio: se ocultan los resultados hasta pulsar «Comprobar»
 // ---------------------------------------------------------------------
 function ocultando() { return !!estado?.ejercicio && !revelado; }
@@ -466,8 +548,10 @@ function aplicarModoEjercicio() {
   app.classList.toggle('ejercicio', !!estado.ejercicio);
   app.classList.toggle('revelado', revelado);
   $('#btn-ejercicio').setAttribute('aria-pressed', String(!!estado.ejercicio));
-  $('#btn-ejercicio').textContent = estado.ejercicio ? 'Salir del modo ejercicio' : 'Modo ejercicio';
-  $('#btn-compartir').textContent = estado.ejercicio ? 'Compartir ejercicio' : 'Compartir';
+  $('#btn-ejercicio').innerHTML = estado.ejercicio
+    ? '<span class="txt-largo">Salir del modo ejercicio</span><span class="txt-corto">Salir</span>'
+    : '<span class="txt-largo">Modo ejercicio</span><span class="txt-corto">Ejercicio</span>';
+  $('#btn-compartir').textContent = estado.ejercicio ? 'Compartir ejercicio' : 'Compartir enlace';
   $('#barra-ejercicio').hidden = !estado.ejercicio;
   $('#btn-comprobar').textContent = revelado ? 'Ocultar resultados' : 'Comprobar resultados';
   $('#texto-ejercicio').textContent = revelado
@@ -489,16 +573,17 @@ $('#btn-comprobar').addEventListener('click', () => {
   revelado = !revelado;
   aplicarModoEjercicio();
   recalcular();
-  if (revelado) document.getElementById('s-resultados').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (revelado && vistaActual === 'datos') irA('calculos');
 });
 
 // ---------------------------------------------------------------------
 // Ejemplos, compartir, instalación
 // ---------------------------------------------------------------------
 function cargarEjemplo(id) {
-  const ejercicio = !!estado.ejercicio;
+  const { ejercicio, plano } = estado;
   estado = copiaEjemplo(id);
-  estado.ejercicio = ejercicio;
+  estado.ejercicio = !!ejercicio;
+  estado.plano = plano;
   revelado = false;
   perfil = null;
   aplicarEstado();
@@ -525,21 +610,48 @@ function toast(texto) {
 }
 
 let eventoInstalar = null;
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); eventoInstalar = e; $('#btn-instalar').hidden = false; });
-$('#btn-instalar').addEventListener('click', async () => {
-  if (eventoInstalar) { eventoInstalar.prompt(); await eventoInstalar.userChoice; eventoInstalar = null; $('#btn-instalar').hidden = true; return; }
-  $('#ayuda-ios').hidden = false;
-});
 const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-if (esIOS && !instalada) $('#btn-instalar').hidden = false;
+if (instalada) { $('#btn-instalar').textContent = 'Ya está instalada'; $('#btn-instalar').disabled = true; }
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); eventoInstalar = e; });
+$('#btn-instalar').addEventListener('click', async () => {
+  if (eventoInstalar) { eventoInstalar.prompt(); await eventoInstalar.userChoice; eventoInstalar = null; return; }
+  if (esIOS) { $('#ayuda-ios').hidden = false; return; }
+  toast('Abre el menú del navegador y elige «Instalar aplicación» o «Añadir a pantalla de inicio».');
+});
 $('#ayuda-ios button').addEventListener('click', () => { $('#ayuda-ios').hidden = true; });
 
-// Navegación por secciones
-$$('.nav a').forEach((a) => a.addEventListener('click', (e) => {
+// ---------------------------------------------------------------------
+// Pestañas: Enlace · Datos · Cálculos · Descargas (dirección #enlace…)
+// ---------------------------------------------------------------------
+const VISTAS = ['enlace', 'datos', 'calculos', 'descargas'];
+let vistaActual = 'enlace';
+function mostrarVista(id) {
+  if (!VISTAS.includes(id)) id = 'enlace';
+  vistaActual = id;
+  for (const v of VISTAS) {
+    $(`#v-${v}`).hidden = v !== id;
+    const t = $(`#t-${v}`);
+    t.setAttribute('aria-selected', String(v === id));
+    t.tabIndex = v === id ? 0 : -1;
+  }
+  window.scrollTo({ top: 0 });
+}
+function irA(id) {
+  if (location.hash !== `#${id}`) history.pushState(null, '', `#${id}`);
+  mostrarVista(id);
+}
+$$('.pestanas a, a.enlace-vista').forEach((a) => a.addEventListener('click', (e) => {
   e.preventDefault();
-  document.getElementById(a.getAttribute('href').slice(1)).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  irA(a.getAttribute('href').slice(1));
 }));
+$('.pestanas').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const i = (VISTAS.indexOf(vistaActual) + (e.key === 'ArrowRight' ? 1 : VISTAS.length - 1)) % VISTAS.length;
+  irA(VISTAS[i]);
+  $(`#t-${VISTAS[i]}`).focus();
+});
+window.addEventListener('popstate', () => mostrarVista(location.hash.slice(1)));
 
 // ---------------------------------------------------------------------
 // Arranque
@@ -547,7 +659,9 @@ $$('.nav a').forEach((a) => a.addEventListener('click', (e) => {
 function aplicarEstado() {
   aplicarModoEjercicio();
   escribirFormulario();
-  ponerColocar(estado.colocar || 'B');
+  ponerColocar(estado.colocar || 'ninguno');
+  $('#pl-formato').value = estado.plano.formato;
+  $('#pl-exag').value = String(estado.plano.exag);
   mapa.ponerMarcador('A', estado.a, 'A');
   mapa.ponerMarcador('B', estado.b, 'B');
   mapa.ponerLinea(estado.a, estado.b);
@@ -558,7 +672,8 @@ function aplicarEstado() {
 }
 
 estado = estadoInicial();
-if (location.search) history.replaceState(null, '', location.pathname);
+if (location.search) history.replaceState(null, '', location.pathname + location.hash);
+mostrarVista(location.hash.slice(1));
 aplicarEstado();
 
 if ('serviceWorker' in navigator && window.isSecureContext) {

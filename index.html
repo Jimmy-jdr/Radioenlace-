@@ -32,28 +32,32 @@
       </div>
     </div>
     <div class="acciones">
-      <label class="oculto" for="ejemplo">Ejemplos</label>
-      <select id="ejemplo" class="boton-cab"></select>
       <button type="button" id="btn-ejercicio" class="boton-cab" aria-pressed="false">Modo ejercicio</button>
-      <button type="button" id="btn-compartir" class="boton-cab">Compartir</button>
-      <button type="button" id="btn-instalar" class="boton-cab destacado" hidden>Instalar</button>
     </div>
   </header>
 
-  <nav class="nav" aria-label="Secciones">
-    <a href="#s-mapa">Mapa</a><a href="#s-datos">Datos</a><a href="#s-perfil">Perfil</a><a href="#s-resultados">Resultados</a><a href="#s-calculos">Cálculos</a>
+  <nav class="pestanas" role="tablist" aria-label="Secciones de la aplicación">
+    <a role="tab" href="#enlace" data-vista="enlace" id="t-enlace" aria-controls="v-enlace">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19l5-7 4 4 3-3 6 6z"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><path d="M5 6h14" stroke-dasharray="2 2"/></svg><span>Enlace</span></a>
+    <a role="tab" href="#datos" data-vista="datos" id="t-datos" aria-controls="v-datos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Datos</span></a>
+    <a role="tab" href="#calculos" data-vista="calculos" id="t-calculos" aria-controls="v-calculos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg><span>Cálculos</span></a>
+    <a role="tab" href="#descargas" data-vista="descargas" id="t-descargas" aria-controls="v-descargas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Descargas</span></a>
   </nav>
 
-  <main class="rejilla">
-    <div class="col col-izq">
-    <!-- 1. MAPA -->
+  <main>
+  <!-- ============ ENLACE ============ -->
+  <section id="v-enlace" class="vista vista-enlace" role="tabpanel" aria-labelledby="t-enlace">
     <section id="s-mapa" class="tarjeta area-mapa">
       <div class="tarjeta-cab">
-        <h2><span class="paso-n">1</span> Emplazamientos</h2>
-        <div class="colocar" role="group" aria-label="Qué emplazamiento coloca un toque en el mapa">
-          <span>Tocar el mapa coloca</span>
+        <h2>Emplazamientos</h2>
+        <div class="colocar" role="group" aria-label="Qué punto se mueve al tocar el mapa">
+          <span>Mover</span>
           <button type="button" data-id="A" aria-pressed="false" class="pastilla-a">A</button>
-          <button type="button" data-id="B" aria-pressed="true" class="pastilla-b">B</button>
+          <button type="button" data-id="B" aria-pressed="false" class="pastilla-b">B</button>
+          <button type="button" data-id="ninguno" aria-pressed="true" class="pastilla-n">Ninguno</button>
         </div>
       </div>
       <div id="mapa"></div>
@@ -62,16 +66,27 @@
         <b id="resumen-distancia" class="distancia">—</b>
         <span class="extremo"><i class="pastilla-b">B</i><span id="resumen-b"></span></span>
       </div>
-      <p class="pista">Toca el mapa para situar el extremo elegido, o arrastra los marcadores A y B. Pellizca para ampliar.</p>
+      <p class="pista" id="pista-mapa">Elige <b>A</b> o <b>B</b> y toca el mapa (o arrastra ese marcador) para moverlo. Con <b>Ninguno</b> puedes desplazar el mapa sin mover los puntos.</p>
     </section>
 
-    <!-- 3. PERFIL -->
-    <section id="s-perfil" class="tarjeta area-perfil">
-      <div class="tarjeta-cab">
-        <h2><span class="paso-n">3</span> Perfil del trayecto</h2>
-        <span id="chip-perfil" class="chip solo-revelado">…</span>
-      </div>
-      <div id="aviso-perfil" class="aviso-perfil solo-revelado" role="status" hidden></div>
+    <div class="col-enlace">
+      <section id="s-resumen" class="tarjeta resumen" aria-live="polite">
+        <div class="tarjeta-cab"><h2>Resumen</h2><span id="chip-perfil" class="chip solo-revelado">…</span></div>
+        <p id="sum-veredicto" class="veredicto-global solo-revelado"><b id="sum-titulo">Calculando…</b> <span id="sum-texto"></span></p>
+        <p class="veredicto-global solo-ejercicio">Calcula a mano y pulsa <b>Comprobar resultados</b> para ver la evaluación del enlace.</p>
+        <dl class="cifras-resumen">
+          <div><dt>Pérdidas totales</dt><dd id="sum-perdidas" class="oculta">—</dd></div>
+          <div><dt>Potencia recibida</dt><dd id="sum-prx" class="oculta">—</dd></div>
+          <div><dt>Margen</dt><dd id="sum-margen" class="oculta">—</dd></div>
+          <div><dt>Despeje mínimo</dt><dd id="sum-despeje" class="oculta">—</dd></div>
+        </dl>
+        <p id="sum-nota" class="nota solo-revelado"></p>
+        <a href="#calculos" class="enlace-vista">Ver los cálculos paso a paso <span aria-hidden="true">→</span></a>
+      </section>
+
+      <section id="s-perfil" class="tarjeta area-perfil">
+        <div class="tarjeta-cab"><h2>Perfil del trayecto</h2></div>
+        <div id="aviso-perfil" class="aviso-perfil solo-revelado" role="status" hidden></div>
       <div id="grafico"></div>
       <ul class="leyenda">
         <li><i class="l-terreno"></i>Relieve + curvatura (k)</li>
@@ -87,17 +102,21 @@
         <label><span>Antena B</span><input id="r-hb" type="range" min="0" max="120" step="1"><b id="v-hb"></b></label>
         <label><span>Frecuencia</span><input id="r-f" type="range" min="0" max="1000" step="1"><b id="v-f"></b></label>
       </div>
-      <details class="fuente-relieve" open>
+      <details class="fuente-relieve">
         <summary>Fuente y resolución del relieve</summary>
         <div id="fuente"><p class="nota">Pendiente de descarga…</p></div>
       </details>
-    </section>
-
+      </section>
     </div>
-    <div class="col col-der">
-    <!-- 2. DATOS -->
-    <section id="s-datos" class="tarjeta area-datos">
-      <div class="tarjeta-cab"><h2><span class="paso-n">2</span> Datos del enlace</h2></div>
+  </section>
+
+  <!-- ============ DATOS ============ -->
+  <section id="v-datos" class="vista vista-datos" role="tabpanel" aria-labelledby="t-datos" hidden>
+    <section id="s-datos" class="tarjeta">
+      <div class="tarjeta-cab">
+        <h2>Datos del enlace</h2>
+        <label class="ejemplos"><span>Cargar ejemplo</span><select id="ejemplo"></select></label>
+      </div>
       <form id="formulario" autocomplete="off" onsubmit="return false">
         <div class="tabla-sitios">
           <span></span><span class="col-cab"><i class="pastilla-a">A</i> Transmisor</span><span class="col-cab"><i class="pastilla-b">B</i> Receptor</span>
@@ -183,12 +202,17 @@
           </div>
         </div>
       </form>
+      <p class="nota">Los cambios se aplican al momento: el perfil y los resultados se recalculan solos.</p>
     </section>
+  </section>
 
-    <!-- 4. RESULTADOS -->
-    <section id="s-resultados" class="area-res">
+  <!-- ============ CÁLCULOS ============ -->
+  <section id="v-calculos" class="vista vista-calculos" role="tabpanel" aria-labelledby="t-calculos" hidden>
+    <div id="enunciado" class="enunciado" hidden><h3 id="enunciado-titulo"></h3><p id="enunciado-texto"></p></div>
+    <div id="comprobacion" class="comprobacion tarjeta solo-revelado" hidden></div>
+    <div id="s-resultados" class="area-res">
       <article class="tarjeta resultado">
-        <div class="tarjeta-cab"><h2><span class="paso-n">4</span> Presupuesto en espacio libre</h2></div>
+        <div class="tarjeta-cab"><h2>Presupuesto en espacio libre</h2></div>
         <dl class="cifras">
           <div><dt>Potencia transmitida</dt><dd id="res-ptx" class="oculta">—</dd></div>
           <div><dt>PIRE</dt><dd id="res-pire" class="oculta">—</dd></div>
@@ -200,10 +224,10 @@
         <p id="veredicto-presupuesto" class="veredicto solo-revelado"></p>
       </article>
       <article class="tarjeta resultado">
-        <div class="tarjeta-cab"><h2><span class="paso-n">5</span> Despeje de Fresnel</h2></div>
+        <div class="tarjeta-cab"><h2>Despeje de Fresnel</h2></div>
         <dl class="cifras">
           <div><dt>Punto más comprometido</dt><dd id="res-peor-d" class="oculta">—</dd></div>
-          <div><dt>Despeje sobre el relieve</dt><dd id="res-peor-c" class="oculta">—</dd></div>
+          <div><dt>Despeje sobre el relieve (c)</dt><dd id="res-peor-c" class="oculta">—</dd></div>
           <div><dt>Radio r₁ en ese punto</dt><dd id="res-peor-r1" class="oculta">—</dd></div>
           <div class="grande"><dt>Despeje / r₁</dt><dd id="res-peor-pct" class="oculta">—</dd></div>
           <div><dt>r₁ en el punto medio</dt><dd id="res-r1-medio" class="oculta">—</dd></div>
@@ -211,38 +235,82 @@
         </dl>
         <p id="veredicto-fresnel" class="veredicto solo-revelado"></p>
       </article>
-      <article class="tarjeta exportar">
-        <div class="tarjeta-cab"><h2>Exportar resultados</h2></div>
-        <p class="nota">Archivos CSV para Excel (configuración española: punto y coma y coma decimal) del enlace que estás viendo.</p>
-        <p class="nota solo-ejercicio">En modo ejercicio la exportación se activa al pulsar «Comprobar resultados».</p>
-        <div class="botones-exportar solo-revelado">
-          <button type="button" id="btn-csv-informe" class="boton">Descargar informe CSV</button>
-          <button type="button" id="btn-csv-perfil" class="boton secundario">Descargar perfil CSV</button>
-        </div>
-        <p class="nota">El informe tiene una fila por cada dato o cálculo, con su fórmula, la sustitución numérica, el valor y la unidad. El perfil tiene una fila por cada cota del trayecto.</p>
+      <article class="tarjeta resultado">
+        <div class="tarjeta-cab"><h2>Difracción y evaluación</h2></div>
+        <dl class="cifras">
+          <div><dt>Altura del obstáculo sobre la LOS (h)</dt><dd id="res-dif-h" class="oculta">—</dd></div>
+          <div><dt>Parámetro de difracción ν</dt><dd id="res-dif-nu" class="oculta">—</dd></div>
+          <div><dt>Pérdida por difracción J(ν)</dt><dd id="res-dif-j" class="oculta">—</dd></div>
+          <div class="grande"><dt>Potencia recibida con difracción</dt><dd id="res-dif-prx" class="oculta">—</dd></div>
+          <div class="grande"><dt>Margen con difracción</dt><dd id="res-dif-margen" class="oculta">—</dd></div>
+        </dl>
+        <p id="veredicto-global" class="veredicto solo-revelado"></p>
       </article>
-    </section>
-
     </div>
-    <!-- 5. CÁLCULOS -->
-    <section id="s-calculos" class="tarjeta area-calc">
-      <div class="tarjeta-cab"><h2><span class="paso-n">6</span> Cálculos paso a paso</h2></div>
-      <div id="enunciado" class="enunciado" hidden><h3 id="enunciado-titulo"></h3><p id="enunciado-texto"></p></div>
-      <div id="comprobacion" class="comprobacion solo-revelado" hidden></div>
+    <section id="s-calculos" class="tarjeta">
+      <div class="tarjeta-cab"><h2>Cálculos paso a paso</h2></div>
       <p class="nota">Cada fila muestra la fórmula y el resultado. Tócala para ver los datos, la fórmula completa y la sustitución numérica. El informe CSV incluye todo el detalle.</p>
       <div id="pasos"></div>
       <details class="fuentes-biblio">
         <summary>Fuentes y criterios de cálculo</summary>
         <ol id="fuentes-biblio"></ol>
-        <p class="nota">Criterio de despeje usado: al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k elegido. Para el diseño de enlaces reales, la UIT-R P.530 aplica criterios más exigentes.</p>
+        <p class="nota">Criterio de despeje usado: al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k elegido. Si no se cumple, se estima la pérdida por difracción del obstáculo principal como un filo de cuchillo (UIT-R P.526). Para el diseño de enlaces reales, la UIT-R P.530 aplica criterios más exigentes.</p>
       </details>
     </section>
+  </section>
+
+  <!-- ============ DESCARGAS ============ -->
+  <section id="v-descargas" class="vista vista-descargas" role="tabpanel" aria-labelledby="t-descargas" hidden>
+    <article class="tarjeta">
+      <div class="tarjeta-cab"><h2>Compartir</h2></div>
+      <p class="nota">Crea un enlace con todos los datos de este radioenlace. Si el modo ejercicio está activo, el enlace abre el ejercicio con los resultados ocultos. Puedes convertirlo en un código QR para la pizarra.</p>
+      <button type="button" id="btn-compartir" class="boton">Compartir enlace</button>
+    </article>
+
+    <article class="tarjeta">
+      <div class="tarjeta-cab"><h2>Planos</h2></div>
+      <p class="nota solo-ejercicio">En modo ejercicio las descargas se activan al pulsar «Comprobar resultados».</p>
+      <div class="opciones-plano">
+        <div class="campo"><label for="pl-formato">Tamaño del papel (PDF)</label>
+          <select id="pl-formato"><option value="A4">A4 apaisado</option><option value="A3">A3 apaisado</option></select></div>
+        <div class="campo"><label for="pl-exag">Exageración vertical del perfil</label>
+          <select id="pl-exag"><option value="1">×1 · sin exagerar</option><option value="5">×5</option><option value="10">×10</option><option value="20">×20</option></select></div>
+      </div>
+      <div class="botones-exportar solo-revelado">
+        <button type="button" id="btn-pdf" class="boton">Plano PDF</button>
+        <button type="button" id="btn-dxf-perfil" class="boton secundario">Perfil DXF (CAD)</button>
+        <button type="button" id="btn-dxf-planta" class="boton secundario">Planta DXF · UTM</button>
+        <button type="button" id="btn-kml" class="boton secundario">KML · Google Earth</button>
+      </div>
+      <ul class="lista-nota">
+        <li><b>PDF</b>: perfil a escala normalizada con cajetín, resultados y croquis de planta. Imprímelo al 100 % (sin «ajustar a la página») para que las escalas sean exactas.</li>
+        <li><b>Perfil DXF</b>: en metros, por capas (terreno, línea de visión, Fresnel, 60 %, antenas…), con la exageración elegida. Se abre con AutoCAD, LibreCAD, QCAD o FreeCAD.</li>
+        <li><b>Planta DXF</b>: coordenadas UTM ETRS89 reales, así se superpone a la cartografía del IGN o a QGIS.</li>
+        <li><b>KML</b>: emplazamientos, línea del enlace y punto crítico para Google Earth.</li>
+      </ul>
+    </article>
+
+    <article class="tarjeta exportar">
+      <div class="tarjeta-cab"><h2>Tablas para Excel</h2></div>
+      <div class="botones-exportar solo-revelado">
+        <button type="button" id="btn-csv-informe" class="boton">Informe CSV</button>
+        <button type="button" id="btn-csv-perfil" class="boton secundario">Perfil CSV</button>
+      </div>
+      <p class="nota">Archivos CSV para Excel con configuración española (punto y coma y coma decimal). El informe tiene una fila por cada dato o cálculo, con su fórmula, la sustitución numérica, el valor y la unidad. El perfil tiene una fila por cada cota del trayecto.</p>
+    </article>
+
+    <article class="tarjeta">
+      <div class="tarjeta-cab"><h2>Instalar la aplicación</h2></div>
+      <p class="nota">Instalada, se abre a pantalla completa desde el icono y funciona sin conexión con los perfiles ya descargados. En iPhone y iPad hay que usar Safari.</p>
+      <button type="button" id="btn-instalar" class="boton secundario">Instalar en este dispositivo</button>
+    </article>
+  </section>
   </main>
 
   <footer class="pie">
     <p class="autoria"><b>Radioenlace PxP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a href="https://www.safecreative.org/work/2611257759054-radioenlace-pxp" target="_blank" rel="noopener">2611257759054</a>.</p>
     <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
-    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión 1.0.9 · espacio libre y Fresnel. Próximamente: Longley–Rice y mapas de cobertura.</p>
+    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión 1.1.0 · espacio libre, Fresnel y difracción en filo de cuchillo. Próximamente: Longley–Rice y mapas de cobertura.</p>
   </footer>
 </div>
 
