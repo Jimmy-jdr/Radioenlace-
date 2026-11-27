@@ -1,15 +1,15 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // sw.js — Service worker: permite abrir la app sin conexión y guarda
 // en caché las teselas del mapa y el relieve ya consultados.
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.1.0';
+const VERSION = 'radioenlace-v1.2.0';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',
   './js/perfil.js', './js/explicacion.js', './js/ejemplos.js', './js/informe.js', './js/fuentes.js',
-  './js/utm.js', './js/planos.js', './js/veredicto.js',
+  './js/utm.js', './js/planos.js', './js/veredicto.js', './js/itm.js', './js/version.js',
   './iconos/icono-192.png', './iconos/icono-512.png', './iconos/apple-touch-icon.png', './iconos/favicon-32.png',
 ];
 const TESELAS = `${VERSION}-teselas`;
@@ -37,6 +37,9 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  // Estadísticas (GoatCounter): nunca se guardan en caché; sin conexión, simplemente no se cuentan
+  if (/goatcounter\.com$|(^|\.)zgo\.at$/.test(url.hostname)) return;
 
   // Archivos de la propia app: primero la red (para recibir mejoras), si no, la caché
   if (url.origin === location.origin) {

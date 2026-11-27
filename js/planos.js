@@ -1,4 +1,4 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // planos.js — Exportación de planos: PDF (lámina con cajetín), DXF (CAD)
 // y KML (Google Earth). Sin librerías externas: los tres formatos se
@@ -11,11 +11,11 @@
 //   · KML: emplazamientos, línea del enlace y punto crítico.
 // =====================================================================
 import { aUTM, epsgETRS89 } from './utm.js';
-import { VERSION } from './informe.js';
+import { NOMBRE, VERSION, AUTOR, LICENCIA, REGISTRO as CODIGO } from './version.js';
 import { evaluarEnlace } from './veredicto.js';
 
-const AUTOR = 'Jaime Díaz Rodríguez (Jimmy-jdr)';
-const REGISTRO = 'Safe Creative 2611257759054';
+const REGISTRO = `Safe Creative ${CODIGO}`;
+const FIRMA = `${NOMBRE} ${VERSION}`;
 const ESTADOS = {
   despejado: 'Trayecto despejado (≥ 60 % de r1)',
   fresnel: 'Fresnel invadido (< 60 % de r1)',
@@ -37,20 +37,25 @@ function marcas(min, max, cuantas) {
 
 // Resumen común a los tres formatos
 export function resumenPlano(c) {
-  const an = c.an, p = an?.peor, dif = c.dif;
+  const an = c.an, p = an?.peor, dif = c.dif, res = c.resModelo;
+  const itm = res.incluyeTerreno;
   return [
     ['Distancia A–B', `${n(c.dKm, 3)} km`],
     ['Frecuencia', `${n(c.e.fMHz, 1)} MHz`],
     ['Potencia transmitida', `${n(c.e.ptxDbm, 2)} dBm`],
     ['PIRE', `${n(c.pres.pire, 2)} dBm`],
-    ['Pérdidas espacio libre', `${n(c.resModelo.perdida, 2)} dB`],
+    ...(itm
+      ? [['Modelo', `Longley–Rice (ITM), ${n(res.parametros.tiempo, Number.isInteger(res.parametros.tiempo) ? 0 : 1)} % del tiempo`],
+        ['Pérdidas Longley–Rice', `${n(res.perdida, 2)} dB`],
+        ['Modo de propagación', res.detalle.modoTexto]]
+      : [['Pérdidas espacio libre', `${n(res.perdida, 2)} dB`]]),
     ['Potencia recibida', `${n(c.pres.prx, 2)} dBm`],
-    ['Margen (espacio libre)', `${n(c.pres.margen, 2)} dB`],
+    [itm ? 'Margen' : 'Margen (espacio libre)', `${n(c.pres.margen, 2)} dB`],
     ...(dif ? [['Difracción filo cuchillo', `${n(dif.J, 2)} dB (ν = ${n(dif.nu, 2)})`], ['Margen con difracción', `${n(c.pres.margen - dif.J, 2)} dB`]] : []),
     ...(an ? [['r1 en el punto medio', `${n(an.r1Medio, 2)} m`]] : []),
     ...(p ? [['Punto crítico (desde A)', `${n(p.d / 1000, 3)} km`], ['Despeje c / r1', `${n(p.despeje, 2)} m / ${n(p.relacion * 100, 1)} %`]] : []),
     ...(an ? [['Trayecto', ESTADOS[an.estado]]] : []),
-    ['Evaluación', evaluarEnlace(c.pres, an, dif).titulo],
+    ['Evaluación', evaluarEnlace(c.pres, an, dif, undefined, res).titulo],
   ];
 }
 
@@ -78,8 +83,8 @@ export function generarKML(c) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
-  <name>${xml(`Radioenlace ${a.nombre || 'A'} → ${b.nombre || 'B'}`)}</name>
-  <description>${xml(`Generado con Radioenlace PxP ${VERSION} · ${AUTOR} · CC BY-NC-ND 4.0\n\n${desc}`)}</description>
+  <name>${xml(`Radioenlace ${a.nombre || 'A'} – ${b.nombre || 'B'}`)}</name>
+  <description>${xml(`Generado con ${FIRMA} · ${AUTOR} · ${LICENCIA} · ${REGISTRO}\n\n${desc}`)}</description>
   <Style id="sitioA"><IconStyle><color>ffd65712</color><scale>1.2</scale></IconStyle></Style>
   <Style id="sitioB"><IconStyle><color>ff0f48d9</color><scale>1.2</scale></IconStyle></Style>
   <Style id="critico"><IconStyle><color>ff3a2ac6</color><scale>1.1</scale></IconStyle></Style>
@@ -171,8 +176,8 @@ export function generarDXFPerfil(c, exag = 10) {
   for (const p of P) { if (p.relacion != null && p.i > 0 && p.i < P.length - 1 && p.relacion < 0.6) inv.push(p); else cerrar(); }
   cerrar();
   // Mástiles y antenas
-  d.linea('ANTENAS', 0, Y(an.zA), 0, Y(an.yA)); d.circulo('ANTENAS', 0, Y(an.yA), th * 0.6); d.texto('TEXTOS', th, Y(an.yA) + th, th * 1.3, `A · ${c.a.nombre || ''} (h = ${n(c.e.hA, 1)} m)`);
-  d.linea('ANTENAS', D, Y(an.zB), D, Y(an.yB)); d.circulo('ANTENAS', D, Y(an.yB), th * 0.6); d.texto('TEXTOS', D - th, Y(an.yB) + th, th * 1.3, `B · ${c.b.nombre || ''} (h = ${n(c.e.hB, 1)} m)`, 2);
+  d.linea('ANTENAS', 0, Y(an.zA), 0, Y(an.yA)); d.circulo('ANTENAS', 0, Y(an.yA), th * 0.6); d.texto('TEXTOS', th, Y(an.yA) + th, th * 1.3, `A · ${c.a.nombre || ''} · mástil ${n(c.e.hA, 1)} m · cota ${n(an.zA, 1)} m`);
+  d.linea('ANTENAS', D, Y(an.zB), D, Y(an.yB)); d.circulo('ANTENAS', D, Y(an.yB), th * 0.6); d.texto('TEXTOS', D - th, Y(an.yB) + th, th * 1.3, `B · ${c.b.nombre || ''} · mástil ${n(c.e.hB, 1)} m · cota ${n(an.zB, 1)} m`, 2);
   // Punto crítico
   const p = an.peor;
   if (p) {
@@ -182,11 +187,11 @@ export function generarDXFPerfil(c, exag = 10) {
   }
   // Título y datos
   let y = Y(z1) + th * 10;
-  d.texto('TEXTOS', 0, y, th * 2, `Perfil longitudinal del radioenlace ${c.a.nombre || 'A'} → ${c.b.nombre || 'B'}`);
+  d.texto('TEXTOS', 0, y, th * 2, `Perfil longitudinal del radioenlace ${c.a.nombre || 'A'} – ${c.b.nombre || 'B'}`);
   y -= th * 2.4;
   d.texto('TEXTOS', 0, y, th, `Unidades: metros. Eje X: distancia desde A. Eje Y: cota × ${exag} (exageración vertical ×${exag}). k = ${n(c.e.k, 3)}. Relieve: ${c.perfil.fuente.nombre}, ${c.perfil.fuente.resolucion}.`);
   y -= th * 1.6;
-  d.texto('TEXTOS', 0, y, th, `Generado con Radioenlace PxP ${VERSION} · ${AUTOR} · CC BY-NC-ND 4.0 · ${REGISTRO}`);
+  d.texto('TEXTOS', 0, y, th, `Generado con ${FIRMA} · ${AUTOR} · ${LICENCIA} · ${REGISTRO}`);
   const res = resumenPlano(c);
   // Resultados bajo el eje de distancias, en dos columnas
   const mitad = Math.ceil(res.length / 2);
@@ -229,7 +234,7 @@ export function generarDXFPlanta(c) {
     d.texto('TEXTOS', xp + th, yp - th * 2, th, `Punto crítico (${n(an.peor.d / 1000, 3)} km desde A)`);
   }
   d.texto('TEXTOS', x0, y1 + th * 4, th * 2, `Planta del radioenlace · UTM ETRS89 huso ${huso} (EPSG:${epsgETRS89(huso)})`);
-  d.texto('TEXTOS', x0, y1 + th * 1.8, th, `Coordenadas reales en metros: se superpone a la cartografía del IGN. Generado con Radioenlace PxP ${VERSION} · ${AUTOR} · CC BY-NC-ND 4.0`);
+  d.texto('TEXTOS', x0, y1 + th * 1.8, th, `Coordenadas reales en metros: se superpone a la cartografía del IGN. Generado con ${FIRMA} · ${AUTOR} · ${LICENCIA} · ${REGISTRO}`);
   return d.cadena();
 }
 
@@ -250,8 +255,38 @@ function pdfCadena(t) {
   }
   return `(${out})`;
 }
+// Cadenas del diccionario de información (metadatos): UTF-16BE con BOM, válido para cualquier carácter
+function pdfTextoInfo(t) {
+  let hex = 'FEFF';
+  for (let i = 0; i < t.length; i++) hex += t.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
+  return `<${hex}>`;
+}
 // Anchura aproximada de Helvetica (para alinear y recortar textos)
 const anchoTexto = (t, tam) => String(t).length * tam * 0.52;
+// Anchura exacta en puntos con las métricas AFM de Helvetica y Helvetica-Bold (milésimas de em)
+const AFM = {
+  normal: { min: 'a556b556c500d556e556f278g556h556i222j222k500l222m833n556o556p556q556r333s500t278u556v500w722x500y500z500',
+    may: 'A667B667C722D722E667F611G778H722I278J500K667L556M833N722O778P667Q778R722S667T611U722V667W944X667Y667Z611', dos: 278 },
+  negrita: { min: 'a556b611c556d611e556f333g611h611i278j278k556l278m889n611o611p611q611r389s556t333u611v556w778x556y556z500',
+    may: 'A722B722C722D722E667F611G778H722I278J556K722L611M833N722O778P667Q778R722S667T611U722V667W944X667Y667Z611', dos: 333 },
+};
+const tablaAFM = {};
+for (const [k, v] of Object.entries(AFM)) {
+  const t = {};
+  for (const m of (v.min + v.may).matchAll(/([A-Za-z])(\d+)/g)) t[m[1]] = +m[2];
+  Object.assign(t, { ' ': 278, ',': 278, '.': 278, ':': v.dos, ';': v.dos, '-': 333, '=': 584, '%': 889, '(': 333, ')': 333, '/': 278, '·': 278, '–': 556, '—': 1000, '>': 584, '<': 584 });
+  for (let d = 0; d <= 9; d++) t[d] = 556;
+  tablaAFM[k] = t;
+}
+function anchoExacto(t, tam, negrita) {
+  const tab = tablaAFM[negrita ? 'negrita' : 'normal'];
+  let w = 0;
+  for (const ch of String(t)) {
+    const base = ch.normalize('NFD')[0];                    // á → a
+    w += tab[ch] ?? tab[base] ?? 600;
+  }
+  return (w / 1000) * tam;
+}
 // Recorta un texto con «…» para que no pase de maxMm milímetros
 function recortar(t, tam, maxMm) {
   t = String(t);
@@ -297,7 +332,7 @@ class Lienzo {
     obj.push(`<< /Length ${flujo.length} >>\nstream\n${flujo}\nendstream`);
     obj.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     obj.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-    obj.push(`<< /Title ${pdfCadena(titulo)} /Author ${pdfCadena(AUTOR)} /Creator ${pdfCadena(`Radioenlace PxP ${VERSION}`)} >>`);
+    obj.push(`<< /Title ${pdfTextoInfo(titulo)} /Author ${pdfTextoInfo(AUTOR)} /Creator ${pdfTextoInfo(FIRMA)} /Subject ${pdfTextoInfo(`${LICENCIA} · ${REGISTRO}`)} >>`);
     let s = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n';
     const offs = [];
     obj.forEach((o, i) => { offs.push(s.length); s += `${i + 1} 0 obj\n${o}\nendobj\n`; });
@@ -307,6 +342,45 @@ class Lienzo {
     const bytes = new Uint8Array(s.length);
     for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
     return bytes;
+  }
+}
+
+// Coloca un rótulo con fondo blanco por encima de su punto de anclaje (ax, ay, en mm)
+// sin tocar el relieve ni otros rótulos. Si tiene que alejarse, traza una línea de referencia.
+function colocarRotulo(L, { t, tam, ax, ay, alin, col, P, X, Y, area, ocupados }) {
+  const [ax0, ay0, ax1, ay1] = area;
+  const pad = 0.9, sep = 1.0;
+  const alto = (tam / L.k) * 0.95 + 2 * pad;
+  const ancho = anchoExacto(t, tam, true) / L.k + 2 * pad;
+  let x0 = alin === 'i' ? ax : alin === 'd' ? ax - ancho : ax - ancho / 2;
+  x0 = Math.min(Math.max(x0, ax0 + 0.5), ax1 - ancho - 0.5);
+  const x1 = x0 + ancho;
+  // Punto más alto del relieve (menor y del papel) bajo la caja, incluidos los vecinos de los bordes
+  let techo = Infinity;
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i];
+    if (p.zEf == null) continue;
+    const x = X(p.d), xa = i > 0 ? X(P[i - 1].d) : x, xs = i < P.length - 1 ? X(P[i + 1].d) : x;
+    if (xs >= x0 && xa <= x1) techo = Math.min(techo, Y(p.zEf));
+  }
+  const solapa = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  let caja = null;
+  for (let base = Math.min(ay - sep, techo - sep); base - alto >= ay0 + 0.5; base -= 0.5) {
+    const c = [x0, base - alto, x1, base];
+    if (!ocupados.some((o) => solapa(o, c))) { caja = c; break; }
+  }
+  if (!caja) caja = [x0, ay0 + 0.5, x1, ay0 + 0.5 + alto]; // sin hueco: arriba del todo
+  ocupados.push([caja[0] - 0.8, caja[1] - 0.8, caja[2] + 0.8, caja[3] + 0.8]);
+  // Línea de referencia si el rótulo queda lejos de su punto
+  const linea = caja[3] < ay - sep - 1.5 ? [Math.min(Math.max(ax, caja[0] + 1), caja[2] - 1), caja[3], ax, ay] : null;
+  return { t, tam, col, caja, linea, pad };
+}
+// Dibuja primero todas las líneas de referencia y después las cajas, para que ninguna línea cruce un rótulo
+function dibujarRotulos(L, rotulos) {
+  for (const r of rotulos) if (r.linea) L.color(...r.col).grosor(0.15).linea(...r.linea);
+  for (const { t, tam, col, caja, pad } of rotulos) {
+    L.color(255, 255, 255, true).color(...col).grosor(0.2).rect(caja[0], caja[1], caja[2] - caja[0], caja[3] - caja[1], 'B');
+    L.color(...col, true).texto(caja[0] + pad, caja[3] - pad - (tam / L.k) * 0.22, t, tam, { negrita: true });
   }
 }
 
@@ -322,7 +396,7 @@ export function generarPDF(c, { formato = 'A4', exag = 10, fecha = new Date() } 
   // Recuadro
   L.color(20, 33, 42).grosor(0.5).rect(m, m, W - 2 * m, H - 2 * m);
   // Título
-  L.texto(m + 4, m + 8, recortar(`Perfil longitudinal del radioenlace ${c.a.nombre || 'A'} → ${c.b.nombre || 'B'}`, 13 * s, W - 2 * m - 8), 13 * s, { negrita: true });
+  L.texto(m + 4, m + 8, recortar(`Perfil longitudinal del radioenlace ${c.a.nombre || 'A'} – ${c.b.nombre || 'B'}`, 13 * s, W - 2 * m - 8), 13 * s, { negrita: true });
   // ---------- Zona del perfil ----------
   const bandaInf = (formato === 'A3' ? 78 : 62);
   const px0 = m + 20, py0 = m + 16, pw = W - 2 * m - 30, ph = H - 2 * m - bandaInf - 30;
@@ -380,17 +454,9 @@ export function generarPDF(c, { formato = 'A4', exag = 10, fecha = new Date() } 
   L.color(20, 33, 42).grosor(0.6).linea(X(0), Y(an.zA), X(0), Y(an.yA)).linea(X(D), Y(an.zB), X(D), Y(an.yB));
   L.color(18, 87, 214, true).circulo(X(0), Y(an.yA), 1.2, 'f');
   L.color(217, 72, 15, true).circulo(X(D), Y(an.yB), 1.2, 'f');
-  L.color(20, 33, 42).texto(X(0) + 2, Y(an.yA) - 2, `A (h = ${n(c.e.hA, 1)} m)`, 8 * s, { negrita: true });
-  L.texto(X(D) - 2, Y(an.yB) - 2, `B (h = ${n(c.e.hB, 1)} m)`, 8 * s, { negrita: true, alin: 'd' });
-  // Punto crítico
   const pc = an.peor;
-  if (pc) {
-    const col = { despejado: [17, 121, 90], fresnel: [168, 98, 0], obstruido: [198, 42, 58] }[an.estado];
-    L.color(...col).grosor(0.4).circulo(X(pc.d), Y(pc.zEf), 1.4).discontinua(true).linea(X(pc.d), Y(pc.zEf), X(pc.d), Y(pc.los)).discontinua(false);
-    const tx = `Punto crítico: ${n(pc.d / 1000, 3)} km · c = ${n(pc.despeje, 2)} m · c/r1 = ${n(pc.relacion * 100, 1)} %`;
-    const xt = Math.min(Math.max(X(pc.d) - anchoTexto(tx, 7.5 * s) / L.k / 2, px0), px0 + pw - anchoTexto(tx, 7.5 * s) / L.k);
-    L.color(...col, true).texto(xt, Math.max(Y(Math.max(pc.zEf, pc.los + pc.r1)) - 3, py0 + 3), tx, 7.5 * s, { negrita: true });
-  }
+  const colPc = pc ? { despejado: [17, 121, 90], fresnel: [168, 98, 0], obstruido: [198, 42, 58] }[an.estado] : null;
+  if (pc) L.color(...colPc).grosor(0.4).circulo(X(pc.d), Y(pc.zEf), 1.4).discontinua(true).linea(X(pc.d), Y(pc.zEf), X(pc.d), Y(pc.los)).discontinua(false);
   // Escalas
   L.color(20, 33, 42, true).texto(px0, py0 - 2, `Escala horizontal 1:${miles(eh)} · Escala vertical 1:${miles(ev)} · Exageración vertical ×${exag} · k = ${n(c.e.k, 3)}`, 8 * s);
   // Barra de escala horizontal
@@ -398,6 +464,18 @@ export function generarPDF(c, { formato = 'A4', exag = 10, fecha = new Date() } 
   const bx = px0 + pw - (barraM * 1000) / eh - 2, by = py0 + 4;
   L.color(20, 33, 42).grosor(0.3).rect(bx, by, (barraM * 1000) / eh / 2, 1.2, 'B').rect(bx + (barraM * 1000) / eh / 2, by, (barraM * 1000) / eh / 2, 1.2);
   L.texto(bx, by - 1, '0', 6 * s).texto(bx + (barraM * 1000) / eh, by - 1, barraM >= 1000 ? `${n(barraM / 1000, barraM % 1000 ? 1 : 0)} km` : `${barraM} m`, 6 * s, { alin: 'd' });
+  // Rótulos de A, B y punto crítico: fondo blanco, por encima del relieve y sin pisarse
+  const ocupados = [[bx - 2, by - 4, bx + (barraM * 1000) / eh + 2, by + 2]];
+  const rotulo = (t, tam, ax, ay, alin, col) => colocarRotulo(L, { t, tam, ax, ay, alin, col, P, X, Y, area: [px0, py0, px0 + pw, py0 + ph], ocupados });
+  const rotulos = [
+    rotulo(`A · mástil ${n(c.e.hA, 1)} m · cota ${n(an.zA, 1)} m`, 8 * s, X(0) + 1.5, Y(an.yA), 'i', [20, 33, 42]),
+    rotulo(`B · mástil ${n(c.e.hB, 1)} m · cota ${n(an.zB, 1)} m`, 8 * s, X(D) - 1.5, Y(an.yB), 'd', [20, 33, 42]),
+  ];
+  if (pc) {
+    rotulos.push(rotulo(`Punto crítico: ${n(pc.d / 1000, 3)} km · c = ${n(pc.despeje, 2)} m · c/r1 = ${n(pc.relacion * 100, 1)} %`,
+      7.5 * s, X(pc.d), Y(Math.max(pc.zEf, pc.los + pc.r1)), 'c', colPc));
+  }
+  dibujarRotulos(L, rotulos);
 
   // ---------- Banda inferior: resultados, planta y cajetín ----------
   const by0 = H - m - bandaInf, bh = bandaInf;
@@ -437,7 +515,7 @@ export function generarPDF(c, { formato = 'A4', exag = 10, fecha = new Date() } 
   // Cajetín
   const cf = [
     ['Proyecto', 'Radioenlace punto a punto'],
-    ['Enlace', `${c.a.nombre || 'A'} → ${c.b.nombre || 'B'}`],
+    ['Enlace', `${c.a.nombre || 'A'} – ${c.b.nombre || 'B'}`],
     ['Plano', 'Perfil longitudinal y planta'],
     ['Escalas', `H 1:${miles(eh)} · V 1:${miles(ev)} (×${exag})`],
     ['Formato', `${formato} apaisado · imprimir al 100 %`],
@@ -453,7 +531,7 @@ export function generarPDF(c, { formato = 'A4', exag = 10, fecha = new Date() } 
     L.color(20, 33, 42, true).texto(xc + 26 * s, y, recortar(v, fs, anchoCaj - 26 * s - 4), fs, { negrita: i === 1 });
   });
   L.color(20, 33, 42).grosor(0.2).linea(xc, H - m - 10, W - m, H - m - 10);
-  L.color(86, 101, 110, true).texto(xc + 3, H - m - 5.5, `Radioenlace PxP ${VERSION} · © 2026 ${AUTOR}`, 5.6 * s);
-  L.texto(xc + 3, H - m - 2, `CC BY-NC-ND 4.0 · ${REGISTRO}`, 5.6 * s);
-  return L.documento(`Perfil del radioenlace ${c.a.nombre || 'A'} - ${c.b.nombre || 'B'}`);
+  L.color(86, 101, 110, true).texto(xc + 3, H - m - 5.5, `${FIRMA} · © 2026 ${AUTOR}`, 5.6 * s);
+  L.texto(xc + 3, H - m - 2, `${LICENCIA} · ${REGISTRO}`, 5.6 * s);
+  return L.documento(`Perfil del radioenlace ${c.a.nombre || 'A'} – ${c.b.nombre || 'B'}`);
 }

@@ -1,10 +1,12 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // app.js — Interfaz: une el mapa, los datos, el perfil y los cálculos
 // =====================================================================
 import * as R from './radio.js';
 import { obtenerPerfil, FUENTES } from './terreno.js';
-import { MODELOS, obtenerModelo } from './modelos.js';
+import { MODELOS, obtenerModelo, parametrosITM, ITM_DEFECTO } from './modelos.js';
+import { NOMBRE, VERSION, URL_REGISTRO, REGISTRO } from './version.js';
+import { CLIMAS, SUELOS } from './itm.js';
 import { Mapa } from './mapa.js';
 import { GraficoPerfil } from './perfil.js';
 import { construirPasos } from './explicacion.js';
@@ -16,7 +18,7 @@ import { FUENTES_BIBLIO } from './fuentes.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const CLAVE = 'radioenlace-pxp-v1';
+const CLAVE = 'radioenlace-pxp-v1';   // se conserva tras el cambio de nombre para no perder los datos guardados
 
 // Números en formato español (coma decimal, signo menos tipográfico)
 const f = (x, d = 2) => (x == null || !isFinite(x) ? '—'
@@ -41,7 +43,7 @@ function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
   return JSON.parse(JSON.stringify({
     ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'ninguno',
-    plano: { formato: 'A4', exag: 10 },
+    plano: { formato: 'A4', exag: 10 }, itm: { ...ITM_DEFECTO },
   }));
 }
 
@@ -64,6 +66,8 @@ function validar(s) {
   if (!['A', 'B', 'ninguno'].includes(r.colocar)) r.colocar = 'ninguno';
   if (!['A4', 'A3'].includes(r.plano.formato)) r.plano.formato = 'A4';
   if (![1, 5, 10, 20].includes(+r.plano.exag)) r.plano.exag = 10;
+  if (!MODELOS.some((m) => m.id === r.modelo && m.disponible)) r.modelo = 'espacio-libre';
+  r.itm = parametrosITM(s.itm);
   return r;
 }
 
@@ -111,6 +115,8 @@ const grafico = new GraficoPerfil($('#grafico'), f);
 
 // Selector de modelos (la fase 2 aparece deshabilitada)
 $('#modelo').innerHTML = MODELOS.map((m) => `<option value="${m.id}" ${m.disponible ? '' : 'disabled'}>${esc(m.nombre)}</option>`).join('');
+$('#itm-clima').innerHTML = Object.entries(CLIMAS).map(([v, t]) => `<option value="${v}">${v} · ${esc(t)}</option>`).join('');
+$('#itm-suelo').innerHTML = Object.entries(SUELOS).map(([v, s]) => `<option value="${v}">${esc(s.nombre)} · εr ${fe(s.epsilon, 0)}, σ ${fe(s.sigma, 3)} S/m</option>`).join('');
 $('#ejemplo').innerHTML = '<option value="">Elegir ejemplo…</option>' +
   Object.entries(EJEMPLOS).map(([id, e]) => `<option value="${id}">${esc(e.titulo)}</option>`).join('');
 
@@ -124,6 +130,7 @@ const CAMPOS = [
   ['a-h', 'a.h', 1], ['b-h', 'b.h', 1], ['a-g', 'a.g', 2], ['b-g', 'b.g', 2], ['a-l', 'a.l', 2], ['b-l', 'b.l', 2],
   ['f-valor', 'f.v', 4], ['f-unidad', 'f.u'], ['p-valor', 'p.v', 4], ['p-unidad', 'p.u'],
   ['sens', 'sens', 2], ['k', 'k'], ['terreno', 'terreno'], ['modelo', 'modelo'],
+  ['itm-clima', 'itm.clima'], ['itm-n0', 'itm.n0', 0], ['itm-suelo', 'itm.suelo'], ['itm-pol', 'itm.pol'], ['itm-tiempo', 'itm.tiempo'],
 ];
 const leerRuta = (ruta) => ruta.split('.').reduce((o, k) => o[k], estado);
 const ponerRuta = (ruta, v) => { const ks = ruta.split('.'); const u = ks.pop(); ks.reduce((o, k) => o[k], estado)[u] = v; };
@@ -138,9 +145,15 @@ function escribirFormulario(excepto) {
       el.value = opciones.includes(String(v)) ? String(v) : 'otro';
       $('#k-otro').value = el.value === 'otro' ? String(v).replace('.', ',') : '';
       $('#k-otro-campo').hidden = el.value !== 'otro';
-    } else el.value = dec != null ? fe(v, dec) : v;
+    } else el.value = dec != null ? fe(v, dec) : String(v);
   }
   sincronizarDeslizadores();
+  mostrarOpcionesModelo();
+}
+
+// Las opciones de Longley–Rice solo se ven con ese modelo elegido
+function mostrarOpcionesModelo() {
+  $('#itm-opciones').hidden = estado.modelo !== 'longley-rice';
 }
 
 function errorCampo(el, msg) {
@@ -153,7 +166,7 @@ function errorCampo(el, msg) {
 const LIMITES = {
   'a.lat': [-85, 85], 'b.lat': [-85, 85], 'a.lon': [-180, 180], 'b.lon': [-180, 180],
   'a.h': [0, 500], 'b.h': [0, 500], 'a.g': [-10, 70], 'b.g': [-10, 70], 'a.l': [0, 100], 'b.l': [0, 100],
-  'p.v': [-100, 100000], sens: [-160, 0],
+  'p.v': [-100, 100000], sens: [-160, 0], 'itm.n0': [250, 400],
 };
 
 function alCambiarCampo(ev) {
@@ -173,6 +186,8 @@ function alCambiarCampo(ev) {
       if (el.value === 'otro') { $('#k-otro').focus(); return; }
     }
     ponerRuta(ruta, el.value);
+    if (ruta.startsWith('itm.')) estado.itm = parametrosITM(estado.itm);
+    if (el.id === 'modelo') mostrarOpcionesModelo();
     if (el.id === 'terreno') { pedirPerfil(0); return; }
     if (el.id === 'f-unidad' || el.id === 'p-unidad') sincronizarDeslizadores();
     recalcular();
@@ -305,11 +320,9 @@ async function descargarPerfil() {
 function recalcular() {
   guardar();
   pintarDistancia();
+  mostrarOpcionesModelo();
   const e = entradas();
   const dKm = R.distanciaKm(estado.a, estado.b);
-  const modelo = obtenerModelo(estado.modelo);
-  const resModelo = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: perfil?.puntos });
-  const pres = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: resModelo.perdida, sensibilidad: e.sens });
 
   // El perfil solo vale si corresponde a los emplazamientos actuales
   const vigente = perfil && perfil.puntos.length > 1 &&
@@ -317,21 +330,27 @@ function recalcular() {
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lat - estado.b.lat) < 1e-6 &&
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lon - estado.b.lon) < 1e-6 &&
     (perfil.fuente.id === 'plano') === (estado.terreno === 'plano');
+
+  const modelo = obtenerModelo(estado.modelo);
+  const resModelo = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: vigente ? perfil.puntos : null, hA: e.hA, hB: e.hB, itm: estado.itm });
+  const pres = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: resModelo.perdida, sensibilidad: e.sens });
   const base = { e, a: { ...estado.a }, b: { ...estado.b }, dKm, modelo, resModelo, pres };
+  pintarITM(modelo, resModelo);
   if (!vigente) {
     pintarPresupuesto(e, resModelo, pres, null);
-    pintarDifraccion(pres, null, null);
+    pintarDifraccion(pres, null, null, resModelo);
     pintarResumen(resModelo, pres, null, null);
     ultimoContexto = { ...base, an: null, dif: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
     return; // el perfil llegará al terminar la descarga en curso
   }
 
   analisis = R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k: e.k });
-  const dif = R.difraccionObstaculoPrincipal(analisis, e.fMHz);
+  // Con Longley–Rice el relieve ya está en la pérdida: no se suma la difracción P.526
+  const dif = resModelo.incluyeTerreno ? null : R.difraccionObstaculoPrincipal(analisis, e.fMHz);
   grafico.pintar(analisis, { ocultar: ocultando() });
   pintarPresupuesto(e, resModelo, pres, analisis);
   pintarFresnel(analisis);
-  pintarDifraccion(pres, analisis, dif);
+  pintarDifraccion(pres, analisis, dif, resModelo);
   pintarResumen(resModelo, pres, analisis, dif);
   pintarFuente(perfil, perfil.avisos);
   $('#a-cota').textContent = `${f(analisis.zA, 1)} m`;
@@ -349,15 +368,23 @@ function recalcular() {
 function pintarPresupuesto(e, res, pres, an) {
   const ok = pres.margen >= 0;
   const libre = !an || an.estado === 'despejado';
+  const itm = res.incluyeTerreno;
+  $('#tit-presupuesto').textContent = itm ? 'Presupuesto con Longley–Rice' : 'Presupuesto en espacio libre';
+  $('#etq-perdida').innerHTML = itm ? 'Pérdidas Longley–Rice (L<sub>b</sub>)' : 'Pérdidas en espacio libre';
   $('#res-perdida').textContent = `${f(res.perdida, 1)} dB`;
   $('#res-pire').textContent = `${f(pres.pire, 1)} dBm`;
   $('#res-prx').textContent = `${f(pres.prx, 1)} dBm`;
   $('#res-margen').textContent = `${f(pres.margen, 1)} dB`;
   $('#res-ptx').textContent = `${f(e.ptxDbm, 2)} dBm`;
   const v = $('#veredicto-presupuesto');
-  const clase = !ok ? 'mal' : libre ? 'bien' : 'aviso';
+  const clase = !ok ? 'mal' : libre ? 'bien' : 'aviso';   // mismo criterio que la evaluación global
   v.className = `veredicto solo-revelado ${clase}`;
-  v.innerHTML = !ok
+  const t = res.parametros?.tiempo ?? 50;
+  v.innerHTML = itm
+    ? (ok ? `<b>Nivel suficiente según Longley–Rice.</b> La señal recibida supera la sensibilidad en ${f(pres.margen, 1)} dB durante el ${f(t, Number.isInteger(t) ? 0 : 1)}&nbsp;% del tiempo. El modelo ya incluye el efecto del relieve` +
+        (libre ? '.' : `, pero ${an.estado === 'obstruido' ? 'el relieve corta la línea de visión' : 'el relieve invade la 1.ª zona de Fresnel'}: mira la evaluación.`)
+      : `<b>Nivel insuficiente según Longley–Rice.</b> Faltan ${f(-pres.margen, 1)} dB para alcanzar la sensibilidad durante el ${f(t, Number.isInteger(t) ? 0 : 1)}&nbsp;% del tiempo.`)
+    : !ok
     ? `<b>Nivel insuficiente.</b> Faltan ${f(-pres.margen, 1)} dB para alcanzar la sensibilidad del receptor, incluso en espacio libre.`
     : libre
       ? `<b>Nivel suficiente en espacio libre.</b> La señal recibida supera la sensibilidad en ${f(pres.margen, 1)} dB.`
@@ -367,22 +394,25 @@ function pintarPresupuesto(e, res, pres, an) {
   $('#barra-margen').className = `barra solo-revelado ${clase}`;
 }
 
-function pintarDifraccion(pres, an, dif) {
+function pintarDifraccion(pres, an, dif, res) {
+  // Con Longley–Rice aplicado, la tarjeta de filo de cuchillo se sustituye por la del ITM
+  $('#tarjeta-dif').hidden = !!res?.incluyeTerreno;
   const hay = an && dif;
   $('#res-dif-h').textContent = hay ? `${f(dif.h, 1)} m` : '—';
   $('#res-dif-nu').textContent = hay ? f(dif.nu, 2) : '—';
   $('#res-dif-j').textContent = hay ? `${f(dif.J, 1)} dB` : '—';
   $('#res-dif-prx').textContent = hay ? `${f(pres.prx - dif.J, 1)} dBm` : '—';
   $('#res-dif-margen').textContent = hay ? `${f(pres.margen - dif.J, 1)} dB` : '—';
-  const ev = evaluarEnlace(pres, an, dif, f);
-  const v = $('#veredicto-global');
+  const ev = evaluarEnlace(pres, an, dif, f, res);
+  const v = $(res?.incluyeTerreno ? '#veredicto-itm' : '#veredicto-global');
+  $(res?.incluyeTerreno ? '#veredicto-global' : '#veredicto-itm').innerHTML = '';
   v.className = `veredicto solo-revelado ${ev.nivel === 'pendiente' ? '' : ev.nivel}`;
   v.innerHTML = `<b>${esc(ev.titulo)}.</b> ${esc(ev.texto)}`;
 }
 
 // Tira de resumen de la pestaña «Enlace»: cifras clave y estado con color
 function pintarResumen(res, pres, an, dif) {
-  const ev = evaluarEnlace(pres, an, dif, f);
+  const ev = evaluarEnlace(pres, an, dif, f, res);
   const J = ev.J;
   const caja = $('#sum-veredicto');
   caja.className = `veredicto-global solo-revelado ${ev.nivel === 'pendiente' ? '' : ev.nivel}`;
@@ -396,9 +426,44 @@ function pintarResumen(res, pres, an, dif) {
   const d = $('#sum-despeje');
   d.textContent = an?.peor ? `${f(an.peor.relacion * 100, 0)} % de r₁` : '—';
   d.className = `oculta ${an ? { despejado: '', fresnel: 'aviso', obstruido: 'mal' }[an.estado] : ''}`;
-  $('#sum-nota').textContent = !an ? 'Esperando el perfil del terreno.'
+  const fl = R.perdidasEspacioLibre(R.distanciaKm(estado.a, estado.b), entradas().fMHz);
+  $('#sum-nota').textContent = res.aviso && estado.modelo === 'longley-rice' && an ? res.aviso
+    : !an ? 'Esperando el perfil del terreno.'
+    : res.incluyeTerreno ? `Pérdidas calculadas con Longley–Rice (modo ${res.detalle.modoTexto.toLowerCase()}) para el ${f(res.parametros.tiempo, Number.isInteger(res.parametros.tiempo) ? 0 : 1)} % del tiempo: ${comparaEspacioLibre(res.perdida, fl, f)}. Ya incluyen el relieve.`
     : J > 0 ? `Incluye la pérdida por difracción estimada del obstáculo principal (J = ${f(J, 1)} dB, UIT-R P.526). En espacio libre serían ${f(res.perdida, 1)} dB de pérdidas y ${f(pres.margen, 1)} dB de margen.`
       : 'Trayecto despejado: las pérdidas son las de espacio libre.';
+}
+
+// Tarjeta de Longley–Rice (pestaña Cálculos): solo con ese modelo elegido
+function pintarITM(modelo, res) {
+  const caja = $('#tarjeta-itm');
+  caja.hidden = modelo.id !== 'longley-rice';
+  if (caja.hidden) return;
+  const d = res.detalle, v = d?.inter;
+  const poner = (id, t) => { $(id).textContent = t; };
+  const f1 = (x) => f(Math.abs(x) < 0.05 ? 0 : x, 1);   // sin «−0,0»
+  $('#itm-aviso').hidden = !res.aviso;
+  $('#itm-aviso').textContent = res.aviso || '';
+  poner('#itm-modo', d ? d.modoTexto : '—');
+  poner('#itm-afs', d ? `${f1(v.A_fs__db)} dB` : '—');
+  poner('#itm-aref', d ? `${f1(v.A_ref__db)} dB` : '—');
+  poner('#itm-var', d ? `${f1(v.corregida__db - v.A_ref__db)} dB` : '—');
+  poner('#itm-lb', d ? `${f(res.perdida, 1)} dB` : '—');
+  poner('#itm-dh', d ? `${f(v.delta_h__meter, 1)} m` : '—');
+  poner('#itm-ns', d ? `${f(v.N_s, 1)} · ${f(v.a_e__meter / 6370e3, 2)}` : '—');
+  poner('#itm-hzn', d ? `${f(v.d_hzn__meter[0] / 1000, 1)} · ${f(v.d_hzn__meter[1] / 1000, 1)} km` : '—');
+  poner('#itm-tiempo-txt', `${f(res.parametros.tiempo, Number.isInteger(res.parametros.tiempo) ? 0 : 1)} %`);
+  const av = d?.avisos || [];
+  $('#itm-avisos').hidden = !av.length;
+  $('#itm-avisos').innerHTML = av.length ? `⚠ ${av.map(esc).join('<br>⚠ ')}` : '';
+  if (!d) { $('#veredicto-itm').className = 'veredicto solo-revelado'; $('#veredicto-itm').innerHTML = ''; }
+}
+
+// «X dB más/menos que en espacio libre (Y dB)», o «prácticamente iguales» si difieren menos de 0,05 dB
+function comparaEspacioLibre(L, fl, fmt) {
+  const d = L - fl;
+  if (Math.abs(d) < 0.05) return `prácticamente iguales a las de espacio libre (${fmt(fl, 1)} dB)`;
+  return `${fmt(Math.abs(d), 1)} dB ${d > 0 ? 'más' : 'menos'} que en espacio libre (${fmt(fl, 1)} dB)`;
 }
 
 function pintarFresnel(an) {
@@ -510,7 +575,10 @@ async function exportar(tipo) {
     : filasInforme({ ...c, ejemplo: EJEMPLOS[estado.ejemplo]?.titulo, fecha });
   const nombre = nombreArchivo(tipo, c.a, c.b, fecha);
   const r = await descargar(aCSV(filas), nombre);
-  if (r !== 'cancelado') toast(`${tipo === 'perfil' ? 'Perfil' : 'Informe'} exportado: ${nombre}`);
+  if (r !== 'cancelado') {
+    toast(`${tipo === 'perfil' ? 'Perfil' : 'Informe'} exportado: ${nombre}`);
+    contar(`descarga-csv-${tipo}`, `Descarga: ${tipo === 'perfil' ? 'perfil' : 'informe'} CSV`);
+  }
 }
 $('#btn-csv-informe').addEventListener('click', () => { if (listoParaExportar(false)) exportar('informe'); });
 $('#btn-csv-perfil').addEventListener('click', () => { if (listoParaExportar(true)) exportar('perfil'); });
@@ -519,10 +587,10 @@ $('#btn-csv-perfil').addEventListener('click', () => { if (listoParaExportar(tru
 // Exportar planos: PDF (lámina), DXF (CAD) y KML (Google Earth)
 // ---------------------------------------------------------------------
 const PLANOS = {
-  pdf: { tipo: 'plano', ext: 'pdf', mime: 'application/pdf', texto: 'Plano PDF', crear: (c) => generarPDF(c, { formato: estado.plano.formato, exag: +estado.plano.exag }) },
-  'dxf-perfil': { tipo: 'perfil', ext: 'dxf', mime: 'application/dxf', texto: 'Perfil DXF', crear: (c) => generarDXFPerfil(c, +estado.plano.exag) },
-  'dxf-planta': { tipo: 'planta_UTM', ext: 'dxf', mime: 'application/dxf', texto: 'Planta DXF', crear: (c) => generarDXFPlanta(c) },
-  kml: { tipo: 'enlace', ext: 'kml', mime: 'application/vnd.google-earth.kml+xml', texto: 'KML', crear: (c) => generarKML(c) },
+  pdf: { evento: 'descarga-pdf', tipo: 'plano', ext: 'pdf', mime: 'application/pdf', texto: 'Plano PDF', crear: (c) => generarPDF(c, { formato: estado.plano.formato, exag: +estado.plano.exag }) },
+  'dxf-perfil': { evento: 'descarga-dxf-perfil', tipo: 'perfil', ext: 'dxf', mime: 'application/dxf', texto: 'Perfil DXF', crear: (c) => generarDXFPerfil(c, +estado.plano.exag) },
+  'dxf-planta': { evento: 'descarga-dxf-planta', tipo: 'planta_UTM', ext: 'dxf', mime: 'application/dxf', texto: 'Planta DXF', crear: (c) => generarDXFPlanta(c) },
+  kml: { evento: 'descarga-kml', tipo: 'enlace', ext: 'kml', mime: 'application/vnd.google-earth.kml+xml', texto: 'KML', crear: (c) => generarKML(c) },
 };
 async function exportarPlano(id) {
   if (!listoParaExportar(true)) return;
@@ -530,7 +598,7 @@ async function exportarPlano(id) {
   try {
     const nombre = nombrePlano(def.tipo, def.ext, ultimoContexto.a, ultimoContexto.b);
     const r = await descargar(def.crear(ultimoContexto), nombre, def.mime);
-    if (r !== 'cancelado') toast(`${def.texto} exportado: ${nombre}`);
+    if (r !== 'cancelado') { toast(`${def.texto} exportado: ${nombre}`); contar(def.evento, `Descarga: ${def.texto}`); }
   } catch (err) {
     toast(`No se pudo generar el archivo: ${err.message}`);
   }
@@ -580,10 +648,13 @@ $('#btn-comprobar').addEventListener('click', () => {
 // Ejemplos, compartir, instalación
 // ---------------------------------------------------------------------
 function cargarEjemplo(id) {
-  const { ejercicio, plano } = estado;
+  const { ejercicio, plano, modelo, itm } = estado;
   estado = copiaEjemplo(id);
   estado.ejercicio = !!ejercicio;
   estado.plano = plano;
+  estado.itm = itm;
+  // Los ejercicios con comprobación automática se resuelven en espacio libre
+  if (!EJEMPLOS[id].esperado) estado.modelo = modelo;
   revelado = false;
   perfil = null;
   aplicarEstado();
@@ -609,17 +680,54 @@ function toast(texto) {
   avisoToast = setTimeout(() => { t.hidden = true; }, 3500);
 }
 
+// ---------------------------------------------------------------------
+// Instalación (aviso en la pestaña Enlace, la primera que se ve)
+// ---------------------------------------------------------------------
 let eventoInstalar = null;
 const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-if (instalada) { $('#btn-instalar').textContent = 'Ya está instalada'; $('#btn-instalar').disabled = true; }
+const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function pintarInstalacion(yaInstalada) {
+  const caja = $('#instalar');
+  caja.classList.toggle('instalada', yaInstalada);
+  $('#instalar-texto').innerHTML = yaInstalada
+    ? '<b>✓ App instalada</b> en este dispositivo: se abre desde su icono y funciona sin conexión.'
+    : '<b>Instala la app</b> para abrirla desde un icono a pantalla completa y usarla sin conexión.';
+  $('#btn-instalar').hidden = yaInstalada;
+}
+pintarInstalacion(instalada);
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); eventoInstalar = e; });
+window.addEventListener('appinstalled', () => {
+  eventoInstalar = null;
+  pintarInstalacion(true);
+  contar('instalacion', 'App instalada');
+  toast('App instalada. Ya puedes abrirla desde su icono.');
+});
 $('#btn-instalar').addEventListener('click', async () => {
   if (eventoInstalar) { eventoInstalar.prompt(); await eventoInstalar.userChoice; eventoInstalar = null; return; }
   if (esIOS) { $('#ayuda-ios').hidden = false; return; }
   toast('Abre el menú del navegador y elige «Instalar aplicación» o «Añadir a pantalla de inicio».');
 });
 $('#ayuda-ios button').addEventListener('click', () => { $('#ayuda-ios').hidden = true; });
+
+// ---------------------------------------------------------------------
+// Estadísticas anónimas con GoatCounter (sin cookies y sin contador visible).
+// count.js se carga de forma asíncrona: los eventos esperan a que esté listo.
+// GoatCounter no cuenta las visitas desde localhost (pruebas locales).
+// ---------------------------------------------------------------------
+function contar(evento, titulo) {
+  let intentos = 0;
+  const enviar = () => {
+    const gc = window.goatcounter;
+    if (gc && typeof gc.count === 'function') {
+      try { gc.count({ path: evento, title: titulo, event: true }); } catch { /* sin estadísticas */ }
+      return true;
+    }
+    return false;
+  };
+  if (enviar()) return;
+  const t = setInterval(() => { if (enviar() || ++intentos > 40) clearInterval(t); }, 250);
+}
+if (instalada) contar('apertura-instalada', 'Apertura de la app instalada');
 
 // ---------------------------------------------------------------------
 // Pestañas: Enlace · Datos · Cálculos · Descargas (dirección #enlace…)
@@ -656,6 +764,12 @@ window.addEventListener('popstate', () => mostrarVista(location.hash.slice(1)));
 // ---------------------------------------------------------------------
 // Arranque
 // ---------------------------------------------------------------------
+// Pie: nombre, versión y código de registro salen de version.js
+$('#pie-nombre').textContent = NOMBRE;
+$('#pie-version').textContent = VERSION;
+$('#pie-registro').textContent = REGISTRO;
+$('#pie-registro').href = URL_REGISTRO;
+
 function aplicarEstado() {
   aplicarModoEjercicio();
   escribirFormulario();

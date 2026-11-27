@@ -1,4 +1,4 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // informe.js — Exportación del radioenlace a CSV
 //   · Informe: una fila por dato o cálculo
@@ -8,13 +8,16 @@
 //   UTF-8 con BOM, separador «;», coma decimal y saltos de línea CRLF.
 // Las fórmulas y sustituciones se toman de los mismos pasos que se ven
 // en pantalla (explicacion.js), así que siempre coinciden con ellos.
-// Cuando se añada otro modelo (Longley–Rice), su paso aparecerá aquí.
+// Con Longley–Rice se añaden sus parámetros y todos sus pasos intermedios.
 // =====================================================================
-import { R_TIERRA_KM, rumbo, dbmAW } from './radio.js';
+import { R_TIERRA_KM, rumbo, dbmAW, perdidasEspacioLibre } from './radio.js';
 import { FUENTES_BIBLIO } from './fuentes.js';
 import { evaluarEnlace } from './veredicto.js';
+import { NOMBRE, VERSION, AUTOR, LICENCIA, REGISTRO } from './version.js';
+import { CLIMAS } from './itm.js';
+import { ITM_SITUACIONES, ITM_MDVAR } from './modelos.js';
 
-export const VERSION = '1.1.0';
+export { VERSION };
 const SEP = ';';
 const FIN = '\r\n';
 
@@ -80,8 +83,8 @@ export function filasInforme(ctx) {
 
   // 1. Datos del informe
   const T = 'Informe';
-  filas.push(fila(T, 'Aplicación', '', '', `Radioenlace PxP ${VERSION}`, '', false));
-  filas.push(fila(T, 'Autor de la aplicación', '', '', 'Jaime Díaz Rodríguez (Jimmy-jdr) · CC BY-NC-ND 4.0', '', false));
+  filas.push(fila(T, 'Aplicación', '', '', `${NOMBRE} ${VERSION}`, '', false));
+  filas.push(fila(T, 'Autor de la aplicación', '', '', `${AUTOR} · ${LICENCIA} · Safe Creative ${REGISTRO}`, '', false));
   filas.push(fila(T, 'Fecha y hora de exportación', '', '', fecha.toLocaleString('es-ES'), '', false));
   if (ejemplo) filas.push(fila(T, 'Ejemplo o ejercicio', '', '', ejemplo, '', false));
   filas.push(fila(T, 'Enlace', '', '', `${a.nombre || 'A'} → ${b.nombre || 'B'}`, '', false));
@@ -112,6 +115,20 @@ export function filasInforme(ctx) {
   filas.push(fila(D, 'Factor de radio terrestre equivalente (k)', '', '', num(e.k, 4), ''));
   filas.push(fila(D, 'Radio terrestre (R)', '', '', num(R_TIERRA_KM, 0), 'km'));
   filas.push(fila(D, 'Criterio de despeje (UIT-R P.526: inicio de la zona de difracción)', 'c ≥ 0,6 · r1', '', num(60, 0), '% de r1'));
+  if (modelo.id === 'longley-rice') {
+    const Pm = resModelo.parametros, Sm = resModelo.suelo;
+    const L = 'Parámetros de Longley–Rice';
+    filas.push(fila(L, 'Clima radioeléctrico', '', '', `${Pm.clima} · ${CLIMAS[Pm.clima]}`, '', false));
+    filas.push(fila(L, 'Refractividad de referencia (N0)', '', '', num(Pm.n0, 0), 'unidades N'));
+    filas.push(fila(L, 'Suelo', '', '', Sm.nombre, '', false));
+    filas.push(fila(L, 'Permitividad relativa del suelo (εr)', '', '', num(Sm.epsilon, 0), ''));
+    filas.push(fila(L, 'Conductividad del suelo (σ)', '', '', num(Sm.sigma, 3), 'S/m'));
+    filas.push(fila(L, 'Polarización', '', '', Pm.pol === 'V' ? 'Vertical' : 'Horizontal', '', false));
+    filas.push(fila(L, 'Modo de variabilidad', '', '', `Accidental, sin variabilidad de ubicaciones (mdvar = ${ITM_MDVAR})`, '', false));
+    filas.push(fila(L, 'Porcentaje de tiempo (fiabilidad)', '', '', num(Pm.tiempo, 1), '%'));
+    filas.push(fila(L, 'Porcentaje de situaciones (confianza)', '', '', num(ITM_SITUACIONES, 0), '%'));
+    if (resModelo.aviso) filas.push(fila(L, 'Aviso', '', '', resModelo.aviso, '', false));
+  }
 
   // 3. Emplazamientos
   const E = 'Emplazamientos';
@@ -136,17 +153,48 @@ export function filasInforme(ctx) {
   }
   filas.push(fila('Longitud de onda', 'Longitud de onda (λ)', F('lambda'), S('lambda'), num(299792458 / (e.fMHz * 1e6), 5), 'm'));
 
-  // 5. Presupuesto
-  const P = 'Presupuesto en espacio libre';
+  // 5. Longley–Rice: pasos intermedios
+  const det = resModelo.detalle;
+  if (det) {
+    const v = det.inter, c = v.coef;
+    const I = 'Longley–Rice (ITM)';
+    filas.push(fila(I, 'Cotas del perfil usadas por el modelo', '', '', String(det.pfl.n), '', true));
+    filas.push(fila(I, 'Separación entre cotas', '', '', num(det.pfl.paso, 2), 'm'));
+    filas.push(fila(I, 'Cota media del trayecto (h_s)', 'media sin el 10 % de cada extremo', '', num(v.h_sys__meter, 2), 'm'));
+    filas.push(fila(I, 'Refractividad en superficie (N_s)', F('itm-refractividad'), S('itm-refractividad'), num(v.N_s, 3), 'unidades N'));
+    filas.push(fila(I, 'Radio terrestre efectivo (a_e)', 'a_e = 1 / γ_e', '', num(v.a_e__meter / 1000, 1), 'km'));
+    filas.push(fila(I, 'Factor k equivalente del ITM', 'k = a_e / 6370 km', '', num(v.a_e__meter / 6370e3, 4), ''));
+    filas.push(fila(I, 'Irregularidad del terreno (Δh)', F('itm-deltah'), S('itm-deltah'), num(v.delta_h__meter, 2), 'm'));
+    filas.push(fila(I, 'Altura efectiva de la antena A (h_e1)', '', '', num(v.h_e__meter[0], 2), 'm'));
+    filas.push(fila(I, 'Altura efectiva de la antena B (h_e2)', '', '', num(v.h_e__meter[1], 2), 'm'));
+    filas.push(fila(I, 'Distancia al horizonte desde A (d_L1)', '', '', num(v.d_hzn__meter[0] / 1000, 3), 'km'));
+    filas.push(fila(I, 'Distancia al horizonte desde B (d_L2)', '', '', num(v.d_hzn__meter[1] / 1000, 3), 'km'));
+    filas.push(fila(I, 'Ángulo de horizonte en A (θ1)', '', '', num(v.theta_hzn[0] * 1000, 3), 'mrad'));
+    filas.push(fila(I, 'Ángulo de horizonte en B (θ2)', '', '', num(v.theta_hzn[1] * 1000, 3), 'mrad'));
+    filas.push(fila(I, 'Horizonte en tierra lisa (d_Ls)', 'd_Ls = √(2·h_e1·a_e) + √(2·h_e2·a_e)', '', num(c.d_sML__meter / 1000, 3), 'km'));
+    filas.push(fila(I, 'Modo de propagación', '', '', det.modoTexto, '', false));
+    filas.push(fila(I, 'Atenuación de referencia (A_ref)', F('itm-aref'), S('itm-aref'), num(v.A_ref__db, 3), 'dB'));
+    filas.push(fila(I, 'Pérdidas en espacio libre del ITM (L_bf)', F('itm-afs'), S('itm-afs'), num(v.A_fs__db, 3), 'dB'));
+    filas.push(fila(I, 'Corrección climática del valor mediano (V_med)', '', '', num(v.V_med__db, 3), 'dB'));
+    filas.push(fila(I, 'Desviación por el porcentaje de tiempo (Y_T)', 'Y_T = σ_T · z_T', `z_T = ${numT(v.z_T, 4)}`, num(v.Y_R__db, 3), 'dB'));
+    filas.push(fila(I, 'Desviación por situaciones (Y_S)', '', `z_S = ${numT(v.z_S, 4)}`, num(v.Y_S__db, 3), 'dB'));
+    filas.push(fila(I, 'Atenuación sobre el espacio libre (A)', F('itm-variabilidad'), S('itm-variabilidad'), num(v.corregida__db, 3), 'dB'));
+    filas.push(fila(I, 'Avisos del modelo', '', '', det.avisos.length ? det.avisos.join(' ') : 'Ninguno', '', false));
+  }
+
+  // 6. Presupuesto
+  const P = det ? 'Presupuesto con Longley–Rice' : 'Presupuesto en espacio libre';
+  if (det) filas.push(fila(P, 'Pérdidas en espacio libre (referencia, UIT-R P.525)', '', '', num(perdidasEspacioLibre(dKm, e.fMHz), 2), 'dB'));
   filas.push(fila(P, `Pérdidas de propagación · ${modelo.nombre}`, F('perdida'), S('perdida'), num(resModelo.perdida, 2), 'dB'));
   filas.push(fila(P, 'PIRE', F('pire'), S('pire'), num(pres.pire, 2), 'dBm'));
   filas.push(fila(P, 'Potencia recibida (P_rx)', F('prx'), S('prx'), num(pres.prx, 2), 'dBm'));
   filas.push(fila(P, 'Margen respecto a la sensibilidad (M)', F('margen'), S('margen'), num(pres.margen, 2), 'dB'));
   filas.push(fila(P, 'Evaluación del presupuesto', 'M ≥ 0 dB', `M = ${numT(pres.margen, 2)} dB`,
     pres.margen < 0 ? 'Insuficiente: no alcanza la sensibilidad'
+      : det ? `Suficiente según Longley–Rice durante el ${numT(resModelo.parametros.tiempo, Number.isInteger(resModelo.parametros.tiempo) ? 0 : 1)} % del tiempo (incluye el relieve)`
       : (an && an.estado !== 'despejado' ? 'Suficiente solo en espacio libre: el trayecto no está despejado (ver difracción)' : 'Suficiente: la señal supera la sensibilidad'), '', false));
 
-  // 6. Despeje de Fresnel
+  // 7. Despeje de Fresnel
   if (an) {
     const R = 'Despeje de Fresnel';
     filas.push(fila(R, 'Radio de la 1.ª zona de Fresnel en el punto medio (r1)', F('r1medio'), S('r1medio'), num(an.r1Medio, 2), 'm'));
@@ -177,7 +225,7 @@ export function filasInforme(ctx) {
     an.invasiones.forEach((t, i) => filas.push(fila(R, `Tramo invadido ${i + 1}`, '', '',
       `${numT(t.desde / 1000, 3)} a ${numT(t.hasta / 1000, 3)} km desde A${t.obstruye ? ' (corta la línea de visión)' : ''}`, '', false)));
   }
-  // 7. Difracción en el obstáculo principal y evaluación global
+  // 8. Difracción en el obstáculo principal (solo sin Longley–Rice) y evaluación global
   const dif = ctx.dif;
   if (an && an.peor && dif) {
     const G = 'Difracción (filo de cuchillo)';
@@ -187,10 +235,10 @@ export function filasInforme(ctx) {
     filas.push(fila(G, 'Potencia recibida con difracción (P_rx,d)', 'P_rx,d = P_rx − J', `P_rx,d = ${numT(pres.prx, 2)} − ${numT(dif.J, 2)}`, num(pres.prx - dif.J, 2), 'dBm'));
     filas.push(fila(G, 'Margen con difracción (M_d)', 'M_d = M − J', `M_d = ${numT(pres.margen, 2)} − ${numT(dif.J, 2)}`, num(pres.margen - dif.J, 2), 'dB'));
   }
-  const ev = evaluarEnlace(pres, an, dif);
+  const ev = evaluarEnlace(pres, an, dif, undefined, resModelo);
   filas.push(fila('Evaluación global', ev.titulo, '', '', ev.texto, '', false));
 
-  // 8. Fuentes
+  // 9. Fuentes
   for (const x of FUENTES_BIBLIO) filas.push(fila('Fuentes', `${x.ref}. ${x.titulo}`, x.uso, '', x.url, '', false));
   return filas;
 }

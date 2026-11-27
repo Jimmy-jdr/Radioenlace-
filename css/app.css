@@ -1,6 +1,6 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 /* ==================================================================
-   Radioenlace PxP — estilos
+   Radioenlace PtP — estilos
    Cuaderno de campo técnico: fondo claro, tinta oscura, el azul de la
    señal para la línea de visión y Fresnel, tierra ocre para el relieve.
    ================================================================== */
@@ -405,3 +405,20 @@ sub, sup { font-size: .72em; line-height: 0; }
   .barra-ejercicio p { font-size: 14px; }
   .barra-ejercicio .boton { min-height: 40px; padding: 0 14px; }
 }
+
+/* ---------- Versión 1.2: instalación en la pestaña Enlace ---------- */
+.instalar {
+  grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
+  padding: 8px 8px 8px 14px; border-radius: var(--r); border: 1px solid var(--linea); background: var(--papel); box-shadow: var(--sombra);
+}
+.instalar p { margin: 0; font-size: 14px; color: var(--suave); flex: 1 1 16em; }
+.instalar p b { color: var(--tinta); }
+.instalar .boton { margin-top: 0; min-height: 40px; }
+.instalar.instalada { background: color-mix(in srgb, var(--bien) 10%, var(--papel)); border-color: transparent; }
+.instalar.instalada p b { color: var(--bien); }
+
+/* ---------- Versión 1.2: parámetros de Longley–Rice ---------- */
+.opciones-itm { border: 1px solid var(--linea); border-radius: var(--r); margin: 14px 0 0; padding: 4px 12px 12px; }
+.opciones-itm legend { font-weight: 700; font-size: 15px; padding: 0 6px; }
+.opciones-itm .rejilla-radio { border-top: 0; padding-top: 4px; }
+#itm-modo { white-space: normal; text-align: right; }

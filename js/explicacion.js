@@ -1,4 +1,4 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // explicacion.js — Cálculos paso a paso (fórmula, sustitución, unidades)
 // =====================================================================
@@ -62,8 +62,9 @@ export function construirPasos(ctx, f) {
     nota: `f = ${f(e.fValor, 3).replace(/,?0+$/, '')} ${e.fUnidad} = ${f(e.fMHz, 1)} MHz.`,
   });
 
-  const pm = modelo.explicar({ dKm, fMHz: e.fMHz }, resModelo, f);
-  if (pm) pasos.push({ grupo: 'Presupuesto del enlace', id: 'perdida', ...pm });
+  const pm = modelo.explicar({ dKm, fMHz: e.fMHz, hA: e.hA, hB: e.hB }, resModelo, f);
+  for (const p of [].concat(pm || [])) pasos.push({ grupo: 'Presupuesto del enlace', id: 'perdida', ...p });
+  const Lp = resModelo.simbolo || 'L<sub>el</sub>';
 
   pasos.push({
     grupo: 'Presupuesto del enlace',
@@ -79,11 +80,12 @@ export function construirPasos(ctx, f) {
     grupo: 'Presupuesto del enlace',
     id: 'prx',
     titulo: 'Potencia recibida (P<sub>rx</sub>)',
-    corta: 'P<sub>rx</sub> = PIRE − L<sub>el</sub> + G<sub>B</sub> − L<sub>B</sub>',
-    formula: 'P<sub>rx</sub> = PIRE − L<sub>el</sub> + G<sub>B</sub> − L<sub>B</sub>',
+    corta: `P<sub>rx</sub> = PIRE − ${Lp} + G<sub>B</sub> − L<sub>B</sub>`,
+    formula: `P<sub>rx</sub> = PIRE − ${Lp} + G<sub>B</sub> − L<sub>B</sub>`,
     sustitucion: `P<sub>rx</sub> = ${f(pres.pire, 2)} dBm − ${f(resModelo.perdida, 2)} dB + ${f(e.grx, 2)} dBi − ${f(e.lrx, 2)} dB`,
     resultado: `P<sub>rx</sub> = ${f(pres.prx, 2)} dBm`,
-    nota: 'Es el balance completo: P<sub>rx</sub> = P<sub>tx</sub> + G<sub>A</sub> + G<sub>B</sub> − L<sub>A</sub> − L<sub>B</sub> − L<sub>el</sub>.',
+    nota: `Es el balance completo: P<sub>rx</sub> = P<sub>tx</sub> + G<sub>A</sub> + G<sub>B</sub> − L<sub>A</sub> − L<sub>B</sub> − ${Lp}.` +
+      (resModelo.incluyeTerreno ? ` Aquí ${Lp} es la pérdida de Longley–Rice, que ya incluye el relieve.` : ''),
   });
   pasos.push({
     grupo: 'Presupuesto del enlace',

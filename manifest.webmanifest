@@ -1,7 +1,7 @@
 {
-  "name": "Radioenlace PxP · Planificación de radioenlaces",
-  "short_name": "Radioenlace",
-  "description": "Planificación y estudio de radioenlaces punto a punto: perfil del terreno del IGN, zona de Fresnel, curvatura terrestre y presupuesto de enlace.",
+  "name": "Radioenlace PtP · Planificación de radioenlaces",
+  "short_name": "Radioenlace PtP",
+  "description": "Radioenlace PtP (Point-to-Point): planificación y estudio de radioenlaces punto a punto con el perfil del terreno del IGN, zona de Fresnel, curvatura terrestre, presupuesto de enlace y modelo Longley–Rice.",
   "lang": "es",
   "dir": "ltr",
   "id": "./",

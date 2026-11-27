@@ -1,7 +1,7 @@
-Radioenlace PxP
+Radioenlace PtP (Point-to-Point)
 Copyright © 2026 Jaime Díaz Rodríguez (Jimmy-jdr)
-Registrada en Safe Creative: código 2611257759054 (25/11/2026)
-https://www.safecreative.org/work/2611257759054-radioenlace-pxp
+Registrada en Safe Creative: código 2611267771473
+https://www.safecreative.org/work/2611267771473
 
 Esta obra (código fuente, diseño, textos, ejemplos e iconos) se publica bajo la
 licencia Creative Commons Reconocimiento-NoComercial-SinObraDerivada 4.0
@@ -26,3 +26,8 @@ Datos de terceros (se rigen por sus propias licencias y deben citarse):
   - Modelos Digitales del Terreno y cartografía: © Instituto Geográfico Nacional (IGN) · CNIG.
   - Mapa base OpenStreetMap: © colaboradores de OpenStreetMap.
   - Copernicus DEM GLO-90 (ESA), a través de la API de Open-Meteo.
+
+Modelo Longley–Rice (js/itm.js): traducción a JavaScript de la implementación
+de referencia del Irregular Terrain Model del NTIA/ITS (https://github.com/NTIA/itm),
+obra del Gobierno de EE. UU. en dominio público (17 U.S.C. § 105). La licencia
+CC BY-NC-ND 4.0 se aplica a la traducción, su integración y el resto de la obra.

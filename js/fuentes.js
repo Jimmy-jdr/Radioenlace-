@@ -1,4 +1,4 @@
-/* Radioenlace PxP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
+/* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // fuentes.js — Referencias de las fórmulas y de los datos
 // Se muestran en la app (sección «Fuentes y criterios») y en el informe CSV.
@@ -27,6 +27,18 @@ export const FUENTES_BIBLIO = [
     titulo: 'Procedimiento de predicción para evaluar la interferencia entre estaciones en la superficie de la Tierra',
     uso: 'Radio terrestre real de 6371 km y radio efectivo a·k usados en la curvatura (flecha) del perfil.',
     url: 'https://www.itu.int/rec/R-REC-P.452/es',
+  },
+  {
+    ref: 'NTIA/ITS · Irregular Terrain Model (ITM) 1.2.2, implementación de referencia en C++ (versión 1.3)',
+    titulo: 'Modelo de propagación Longley–Rice en modo punto a punto',
+    uso: 'Pérdida básica de transmisión con el perfil del terreno: horizontes, Δh, línea de visión, difracción, dispersión troposférica y variabilidad. js/itm.js la reproduce función a función y se ha verificado contra ella.',
+    url: 'https://github.com/NTIA/itm',
+  },
+  {
+    ref: 'G. A. Hufford, The ITS Irregular Terrain Model, version 1.2.2. The Algorithm (NTIA/ITS)',
+    titulo: 'Algoritmo del ITM; A. G. Longley y P. L. Rice, ESSA Tech. Rep. ERL 79-ITS 67 (1968); P. L. Rice et al., NBS Technical Note 101 (1967)',
+    uso: 'Ecuaciones citadas en los pasos de Longley–Rice (refractividad, Δh, atenuación de referencia y variabilidad).',
+    url: 'https://its.ntia.gov/research-topics/radio-propagation-software/itm/itm.aspx',
   },
   {
     ref: 'IGN/CNIG · Modelos Digitales del Terreno MDT25 y MDT200',
