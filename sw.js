@@ -7,7 +7,7 @@
 // actualizar (zonas guardadas para usar sin conexión).
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.3.1';
+const VERSION = 'radioenlace-v1.3.2';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',

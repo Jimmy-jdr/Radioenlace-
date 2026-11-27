@@ -6,7 +6,7 @@
 // los planos PDF, DXF y KML los toman de aquí.
 // =====================================================================
 export const NOMBRE = 'Radioenlace PtP';
-export const VERSION = '1.3.1';
+export const VERSION = '1.3.2';
 export const AUTOR = 'Jaime Díaz Rodríguez (Jimmy-jdr)';
 export const LICENCIA = 'CC BY-NC-ND 4.0';
 

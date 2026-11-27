@@ -59,7 +59,7 @@ Solo hay que hacerlo una vez. Tus alumnos **no** necesitan cuenta.
 
 **Para actualizarla más adelante:** sube de nuevo los archivos modificados con
 *Add file → Upload files*. Si cambias algo, abre `sw.js` y sube el número de
-`VERSION` (por ejemplo `radioenlace-v1.3.2`) para que los móviles descarguen la versión nueva.
+`VERSION` (por ejemplo `radioenlace-v1.3.3`) para que los móviles descarguen la versión nueva.
 
 **Al registrar una versión en Safe Creative:** abre `js/version.js`, cambia el número de la
 línea `REGISTRO` por el código nuevo y súbelo. El pie de la app, el informe CSV y los planos

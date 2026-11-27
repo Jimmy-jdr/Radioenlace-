@@ -42,8 +42,9 @@ export function iniciarCobertura(h) {
   ficha.setAttribute('aria-label', 'Datos del píxel');
   for (const el of [leyenda, ficha]) { el.addEventListener('pointerdown', (e) => e.stopPropagation()); mapa.el.appendChild(el); }
   leyenda.addEventListener('click', (e) => { if (e.target.closest('button')) leyenda.classList.toggle('plegada'); });
-  // En pantallas estrechas la leyenda empieza plegada para no tapar el mapa
-  if (matchMedia('(max-width: 520px)').matches) leyenda.classList.add('plegada');
+  // La leyenda empieza plegada si el propio mapa es estrecho (móvil, panel lateral…);
+  // después se respeta lo que elija el usuario.
+  let leyendaIniciada = false;
 
   // ---------- Formulario del panel ----------
   const est = () => h.estado().cobertura;
@@ -126,6 +127,7 @@ export function iniciarCobertura(h) {
       dlat: resultado.malla.dlat, N: resultado.malla.N, opacidad: c.opacidad / 100, visible: ver, circulo: resultado.circulo,
     } : null);
     leyenda.hidden = !ver;
+    if (ver && !leyendaIniciada) { leyendaIniciada = true; if (mapa.el.clientWidth < 560) leyenda.classList.add('plegada'); }
     if (ver) {
       leyenda.innerHTML = `<button type="button" class="cob-leyenda-cab" aria-label="Plegar o desplegar la leyenda">Margen sobre la sensibilidad<span aria-hidden="true"></span></button>
         <ul>${textoBandas(resultado.params.sens).map(([col, t]) => `<li><i style="background:${col ? C.hex(col) : 'rgba(120,120,120,.6)'}"></i>${esc(t)}</li>`).join('')}

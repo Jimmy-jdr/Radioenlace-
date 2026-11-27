@@ -225,7 +225,7 @@ export function resumen(res) {
 // en los que el punto a punto pasa al MDT200: siempre es el MDT25.)
 // ---------------------------------------------------------------------
 export const MAX_BLOQUES = 600;            // peticiones máximas a Open-Meteo por mapa
-export const BYTES_TESELA = 204 * 204 * 7.5; // tamaño aproximado de una tesela ArcGrid
+export const BYTES_TESELA = 204 * 204 * 8;   // tamaño de una tesela ArcGrid (medido en el IGN: 333 252 B ≈ 8 B por cota)
 
 export function teselasCobertura(malla) { return teselasDeCaja(FUENTES.mdt25, cajaCobertura(malla)); }
 export function urlsTeselasCobertura(malla) { return teselasCobertura(malla).map((k) => urlTesela(FUENTES.mdt25, k)); }
