@@ -4,8 +4,9 @@
 para planificar y estudiar radioenlaces punto a punto: mapa táctil, perfil del terreno con
 datos del IGN/CNIG, línea de visión, 1.ª zona de Fresnel con el límite del 60 %, curvatura
 terrestre con factor k, presupuesto de enlace en espacio libre o con el modelo
-**Longley–Rice (ITM)**, con cada cálculo explicado (fórmula, sustitución y unidades), y
-**mapas de cobertura** alrededor del transmisor.
+**Longley–Rice (ITM)**, con cada cálculo explicado (fórmula, sustitución y unidades),
+**mapas de cobertura** alrededor del transmisor, **altura mínima de las antenas** y
+**ejercicios aleatorios con comprobación automática** para clase (con su código QR).
 Hasta la versión 1.1 se llamaba *Radioenlace PxP*.
 
 No necesita cuentas, claves ni servidor propio: son archivos estáticos.
@@ -27,6 +28,10 @@ No necesita cuentas, claves ni servidor propio: son archivos estáticos.
 | `js/cobertura-worker.js` | Cálculo de la cobertura en segundo plano (Web Worker) |
 | `js/cobertura-ui.js` | Panel, capa del mapa, leyenda, ficha del píxel y descargas de la cobertura |
 | `js/cobertura-exportar.js` | Exportación de la cobertura a KMZ (Google Earth) y CSV |
+| `js/ejercicios.js` | Ejercicios aleatorios: datos por alumno, soluciones, tolerancias y puntos de los ejercicios de cobertura |
+| `js/ejercicios-ui.js` | Ejercicios en la interfaz (profesor y alumno) y diálogo del código QR |
+| `js/qr.js` | Generador de códigos QR (norma ISO/IEC 18004), sin conexión |
+| `js/enlace.js` | Enlaces para compartir: normales (`?e=`), comprimidos (`?z=`) y de ejercicio (`?g=`) |
 | `js/mapa.js` | Mapa táctil (capas IGN, ortofoto PNOA, MTN y OpenStreetMap) |
 | `js/perfil.js` | Gráfico del perfil |
 | `js/explicacion.js` | Textos de los cálculos paso a paso |
@@ -59,7 +64,7 @@ Solo hay que hacerlo una vez. Tus alumnos **no** necesitan cuenta.
 
 **Para actualizarla más adelante:** sube de nuevo los archivos modificados con
 *Add file → Upload files*. Si cambias algo, abre `sw.js` y sube el número de
-`VERSION` (por ejemplo `radioenlace-v1.3.3`) para que los móviles descarguen la versión nueva.
+`VERSION` (por ejemplo `radioenlace-v1.4.1`) para que los móviles descarguen la versión nueva.
 
 **Al registrar una versión en Safe Creative:** abre `js/version.js`, cambia el número de la
 línea `REGISTRO` por el código nuevo y súbelo. El pie de la app, el informe CSV y los planos
@@ -75,12 +80,13 @@ PDF, DXF y KML lo toman de ahí. Cambia también el código y el enlace de las l
 ## 3. Compartir con los alumnos (enlace o código QR)
 
 - **Enlace:** copia la dirección de GitHub Pages y pégala en el aula virtual.
-- **Código QR:** abre la dirección en Chrome del ordenador → icono de compartir de la
-  barra de direcciones (o menú ⋮ → *Guardar y compartir*) → **Crear código QR** →
-  *Descargar*. Proyecta o imprime la imagen.
+- **Código QR:** en la pestaña *Descargas*, pulsa **Código QR** y elige *La app (sin
+  datos)* o *Este enlace*. Se genera en la propia app, también sin conexión: **Pantalla
+  completa** para proyectarlo, o descárgalo en **PNG** o **SVG** para imprimirlo.
 - **Compartir un ejercicio concreto:** dentro de la app, prepara los datos y pulsa
   **Compartir**. Se genera un enlace que abre la app con esos mismos emplazamientos y
-  parámetros (puedes convertirlo también en QR).
+  parámetros; desde la 1.4 va comprimido (`?z=`), así su QR es menos denso. Los enlaces
+  `?e=` de versiones anteriores se siguen abriendo.
 
 ---
 
@@ -135,8 +141,10 @@ Si no quieres instalar nada, publícala directamente (apartado 2) y pruébala al
 5. **Mapa de cobertura** (bajo el mapa, en *Enlace*): elige el radio y la antena receptora
    y pulsa *Calcular cobertura*. Con *Mover: Ninguno*, toca el mapa para ver los datos de un
    píxel y pulsa *Poner B aquí* para comprobarlo con el enlace A–B.
-6. **Descargas:** enlace para compartir, planos PDF/DXF/KML, tablas CSV para Excel y la
-   cobertura en KMZ, PNG y CSV.
+6. **Altura mínima** (bajo el perfil): altura de mástil de A, de B o de los dos para despejar
+   el 60 % de la 1.ª zona de Fresnel; se dibuja en el perfil y se puede aplicar.
+7. **Descargas:** enlace y código QR, ejercicios para clase, planos PDF/DXF/KML, tablas CSV
+   para Excel y la cobertura en KMZ, PNG y CSV.
 
 Ejemplos incluidos (menú *Elegir ejemplo…*):
 - **Talavera de la Reina → Cerro Cruces** (Sierra de San Vicente): 5,8 GHz, 0,5 W,
@@ -224,31 +232,88 @@ En la pestaña **Enlace**, debajo del mapa, despliega **Mapa de cobertura**:
 
 ---
 
-## 10. Estadísticas de uso (GoatCounter)
+## 10. Altura mínima de las antenas
+
+Bajo el perfil, despliega **Altura mínima de las antenas (60 % de r₁)**. La tabla da la altura
+de mástil que hace falta para que la línea de visión deje libre al menos el 60 % del radio de
+la 1.ª zona de Fresnel en todo el trayecto (criterio de la UIT-R P.530, § 2.2.2), con el factor k
+de *Datos*:
+
+- **B**, con A a su altura actual; **A**, con B a su altura actual; o **la misma** en los dos.
+- Como la flecha y r₁ no dependen de las alturas, la condición es lineal y el resultado es
+  exacto (no se tantea). Se redondea hacia arriba al decímetro y se indica el punto que la limita.
+- La variante elegida se dibuja en el perfil (línea discontinua) y **Aplicar esta altura** la pone
+  en los datos. También aparece en *Cálculos* (paso explicado) y en el informe CSV.
+
+---
+
+## 11. Ejercicios para clase
+
+**Ejercicio aleatorio** (*Descargas → Ejercicio aleatorio…* o *Datos → Cargar ejemplo*):
+
+| Nivel | Se pregunta |
+|---|---|
+| 1 · Presupuesto | Pérdidas en espacio libre, potencia recibida y margen (terreno plano) |
+| 2 · Fresnel y curvatura | Además, r₁ en el punto medio y en el obstáculo, y la flecha en el obstáculo |
+| 3 · Obstáculo y difracción | Además, altura del obstáculo sobre la línea de visión, ν, J(ν) y margen con difracción (UIT-R P.526) |
+| 4 · Altura mínima | Además, altura mínima de la antena B (con A fija) para despejar el 60 % de r₁ |
+
+1. Elige el nivel y si se permite ver la solución, y pulsa **Crear ejercicio**: se obtiene un
+   código de 6 letras y un enlace corto (`?g=…`) con su **código QR**.
+2. Cada alumno abre el enlace y escribe **su número de lista**: recibe sus propios datos (los
+   mismos en cualquier dispositivo), calcula a mano y escribe sus resultados en *Cálculos*.
+   **Comprobar mis resultados** marca cada uno como correcto o no, sin decir la solución.
+   Se aceptan pequeñas diferencias (0,2 dB en el presupuesto, 1 % en r₁ y flecha, 0,1 m en h,
+   0,02 en ν, 0,3 dB en J), así que vale usar c = 3·10⁸ m/s, 32,44 dB o R = 6370 km.
+3. **Solucionario CSV**: datos y soluciones de cada alumno (del 1 al N o con tu lista).
+
+Los datos y soluciones no viajan en el enlace: se generan en el dispositivo. Es una
+herramienta para practicar, no un examen seguro.
+
+**Ejercicio con el mapa de cobertura**: calcula un mapa y pulsa **Crear ejercicio con este
+mapa…**. Elige *Predicción* (el mapa se ve al final; el alumno pulsa **Estudiar** para ver el
+perfil desde A hasta cada punto) o *Lectura* (el mapa se ve desde el principio), y puntos
+aleatorios por alumno (mitad con señal y mitad sin señal, lejos de los límites de las bandas)
+o marcados por ti en el mapa. Para cada punto P1…Pn el alumno elige si la señal llega y con
+qué margen. El alumno calcula el mismo mapa en su dispositivo con los mismos datos.
+
+Para crear ejercicios a mano está también el relieve **Plano con un obstáculo agudo** en *Datos*,
+con la distancia y la cota del obstáculo.
+
+---
+
+## 12. Estadísticas de uso (GoatCounter)
 
 La app cuenta, de forma anónima y sin cookies, las visitas, las instalaciones, las
-aperturas de la app ya instalada, los mapas de cobertura calculados y las descargas por tipo
-(eventos `instalacion`, `apertura-instalada`, `cobertura-calculada`, `descarga-pdf`,
-`descarga-dxf-perfil`, `descarga-dxf-planta`, `descarga-kml`, `descarga-csv-informe`,
-`descarga-csv-perfil`, `descarga-cobertura-kmz`, `descarga-cobertura-png` y
-`descarga-cobertura-csv`). No hay ningún contador
+aperturas de la app ya instalada, los mapas de cobertura calculados, las descargas por tipo y,
+desde la 1.4, los ejercicios, las alturas aplicadas y los códigos QR (eventos `instalacion`,
+`apertura-instalada`, `cobertura-calculada`, `descarga-pdf`, `descarga-dxf-perfil`,
+`descarga-dxf-planta`, `descarga-kml`, `descarga-csv-informe`, `descarga-csv-perfil`,
+`descarga-cobertura-kmz`, `descarga-cobertura-png`, `descarga-cobertura-csv`,
+`alturas-aplicadas`, `ejercicio-creado`, `ejercicio-iniciado`, `ejercicio-comprobado`,
+`descarga-solucionario-csv`, `ejercicio-cobertura-creado`, `ejercicio-cobertura-iniciado`,
+`ejercicio-cobertura-comprobado`, `qr-generado`, `descarga-qr-png` y `descarga-qr-svg`).
+Nunca se envían los datos de los enlaces compartidos ni los identificadores de los alumnos. No hay ningún contador
 visible: los datos se consultan en el panel <https://radioenlace.goatcounter.com>.
 Las pruebas en `localhost` no se cuentan.
 
 ---
 
-## 11. Comprobar los cálculos (opcional, para quien tenga Node.js)
+## 13. Comprobar los cálculos (opcional, para quien tenga Node.js)
 
 ```
 node pruebas/prueba-calculos.mjs
 node pruebas/prueba-planos.mjs
 node pruebas/prueba-cobertura.mjs
+node pruebas/prueba-ejercicios.mjs
+node pruebas/prueba-qr.mjs
 ```
 
 Comprueban el ejercicio de 5 GHz, la curvatura, la detección de obstáculos, la lectura
 de datos del IGN, Longley–Rice frente a los casos oficiales del NTIA, los planos y que
 cada píxel de la cobertura coincide exactamente con el cálculo punto a punto (con una red
-simulada, sin conexión).
+simulada, sin conexión), que las soluciones de los ejercicios son las que calcula la app, las
+tolerancias, la altura mínima y el código QR con los valores de la norma.
 
 ---
 

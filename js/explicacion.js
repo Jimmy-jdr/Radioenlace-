@@ -141,6 +141,25 @@ export function construirPasos(ctx, f) {
     });
   }
 
+  // Altura mínima de las antenas (versión 1.4)
+  const alt = ctx.alt;
+  if (alt?.b && alt.a && alt.igual) {
+    const pb = alt.b.punto, t = pb.d / an.D;
+    const txt = (x) => (x <= 0 ? 'cualquier altura (≥ 0 m)' : `${f(x, 2)} m`);
+    pasos.push({
+      grupo: 'Altura mínima de las antenas',
+      id: 'altmin',
+      titulo: 'Altura mínima de la antena B para despejar el 60 % de r<sub>1</sub>',
+      corta: 'y<sub>B</sub> ≥ (z + h + 0,6·r<sub>1</sub> − y<sub>A</sub>·(1 − t)) / t',
+      datos: `Antena A a ${f(e.hA, 1)} m (y<sub>A</sub> = ${f(an.yA, 2)} m). Punto que limita: d<sub>1</sub> = ${f(pb.d / 1000, 3)} km, t = d<sub>1</sub>/d = ${f(t, 4)}`,
+      formula: 'y<sub>A</sub>·(1 − t) + y<sub>B</sub>·t ≥ z + h + 0,6·r<sub>1</sub> en cada punto  →  y<sub>B,mín</sub> = máx [ (z + h + 0,6·r<sub>1</sub> − y<sub>A</sub>·(1 − t)) / t ] ;  h<sub>B,mín</sub> = y<sub>B,mín</sub> − z<sub>B</sub>',
+      sustitucion: `z + h + 0,6·r<sub>1</sub> = ${f(pb.z, 2)} + ${f(pb.flecha, 2)} + 0,6 · ${f(pb.r1, 2)} = ${f(alt.b.q, 2)} m<br>` +
+        `y<sub>B,mín</sub> = (${f(alt.b.q, 2)} − ${f(an.yA, 2)} · ${f(1 - t, 4)}) / ${f(t, 4)} = ${f(alt.b.y, 2)} m ;  h<sub>B,mín</sub> = ${f(alt.b.y, 2)} − ${f(an.zB, 2)}`,
+      resultado: `h<sub>B,mín</sub> = ${txt(alt.b.h)}`,
+      nota: `La flecha h y r<sub>1</sub> no dependen de las alturas de las antenas, así que la condición es lineal y la altura mínima es exacta (no hay que tantear). Se aplica en todos los puntos del perfil y manda el más exigente. Con B a su altura actual, A necesitaría ${txt(alt.a.h)}; con la misma altura en los dos extremos, ${txt(alt.igual.h)}. Criterio del 60 %: UIT-R P.530, § 2.2.2.`,
+    });
+  }
+
   const dif = ctx.dif;
   if (p && dif) {
     const d1 = dif.d1, d2 = dif.d2;

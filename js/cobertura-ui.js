@@ -9,6 +9,8 @@
 //   · Capa sobre el mapa, leyenda y ficha del píxel con «Poner B aquí».
 //   · Zonas de relieve guardadas para usar sin conexión.
 //   · Descargas: KMZ (Google Earth), PNG y CSV.
+//   · Versión 1.4: ganchos para los ejercicios con el mapa (modo lectura,
+//     puntos marcados por el profesor) y borrado del mapa al cerrar un ejercicio.
 // =====================================================================
 import * as C from './cobertura.js';
 import { kmlCobertura, crearZip, filasCSV, aCSV, lineasParametros, textoBandas, nombreCobertura } from './cobertura-exportar.js';
@@ -23,7 +25,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const MODOS = { 1: 'línea de visión', 2: 'difracción', 3: 'dispersión troposférica' };
 
 export function iniciarCobertura(h) {
-  // h = { mapa, estado(), entradas(), guardar(), toast(), contar(), ocultando(), ponerB(geo, rx), usarITM(), f, esc }
+  // h = { mapa, estado(), entradas(), guardar(), toast(), contar(), ocultando(), ponerB(geo, rx), usarITM(), f, esc,
+  //       mapaVisibleEnEjercicio(), marcando(geo), alCambiarResultado() }
   const { mapa, f, esc } = h;
   const mb = (bytes) => `${f(bytes / 1e6, bytes < 1e7 ? 1 : 0)} MB`;
   let resultado = null;     // último mapa calculado
@@ -93,7 +96,7 @@ export function iniciarCobertura(h) {
     const s = h.estado(), e = h.entradas(), c = s.cobertura;
     const rx = c.rx === 'b' ? { h: e.hB, g: e.grx, l: e.lrx } : { h: c.h, g: c.g, l: c.l };
     return {
-      a: { lat: s.a.lat, lon: s.a.lon }, terreno: s.terreno === 'plano' ? 'plano' : 'ign',
+      a: { lat: s.a.lat, lon: s.a.lon }, terreno: s.terreno === 'ign' ? 'ign' : 'plano',
       fMHz: e.fMHz, ptxDbm: e.ptxDbm, gtx: e.gtx, ltx: e.ltx, hA: e.hA, sens: e.sens, k: e.k,
       rx, modelo: s.modelo, itm: { ...s.itm }, radioKm: c.radio, N: C.RESOLUCIONES[c.res],
     };
@@ -121,7 +124,7 @@ export function iniciarCobertura(h) {
   function circulo(p) { const r = []; for (let g = 0; g < 360; g += 3) r.push(destino(p.a, g, p.radioKm)); return r; }
   function pintarCapa() {
     const c = est();
-    const ver = !!resultado && c.visible && !h.ocultando();
+    const ver = !!resultado && c.visible && (!h.ocultando() || !!h.mapaVisibleEnEjercicio?.());
     mapa.ponerCobertura(resultado ? {
       imagen: resultado.lienzo, norte: resultado.malla.norte, oeste: resultado.malla.oeste, este: resultado.malla.este,
       dlat: resultado.malla.dlat, N: resultado.malla.N, opacidad: c.opacidad / 100, visible: ver, circulo: resultado.circulo,
@@ -147,6 +150,7 @@ export function iniciarCobertura(h) {
     chip.textContent = resultado.desactualizado ? 'Desactualizado' : 'Calculado';
     $('#cob-desactualizado').hidden = !resultado.desactualizado;
     pintarCapa();
+    h.alCambiarResultado?.();
   }
 
   // ---------- Progreso ----------
@@ -165,6 +169,10 @@ export function iniciarCobertura(h) {
   // ---------- Cálculo ----------
   async function calcular() {
     if (trabajo) return;
+    if (h.estado().terreno === 'obstaculo') {
+      h.toast('El mapa de cobertura no está disponible con el relieve «plano con un obstáculo»: elige el relieve real o el plano en «Datos».');
+      return;
+    }
     const params = parametros();
     const huella = C.huella(params);
     const malla = C.definirMalla(params);
@@ -242,6 +250,7 @@ export function iniciarCobertura(h) {
       });
       if (!hecho || trabajo?.cancelado) return;
       nuevo.completo = true;
+      nuevo.desactualizado = C.huella(parametros()) !== huella;
       nuevo.resumen = C.resumen(res);
       nuevo.segundos = (performance.now() - t0) / 1000;
       nuevo.rel = { teselas: rel.teselas, bloques: rel.bloques, bytes: rel.bytes, red: rel.red };
@@ -254,6 +263,7 @@ export function iniciarCobertura(h) {
       for (const w of trabajo?.trabajadores || []) w.terminate();
       trabajo = null;
       ponerOcupado(false);
+      h.alCambiarResultado?.();
     }
   }
 
@@ -290,6 +300,7 @@ export function iniciarCobertura(h) {
     trabajo.resolver?.(false);
     if (resultado && !resultado.completo) { resultado = null; mapa.ponerCobertura(null); leyenda.hidden = true; $('#cob-chip').hidden = true; }
     h.toast('Cálculo de la cobertura cancelado.');
+    h.alCambiarResultado?.();
   }
   $('#cob-calcular').addEventListener('click', calcular);
   $('#cob-cancelar').addEventListener('click', cancelar);
@@ -359,6 +370,7 @@ export function iniciarCobertura(h) {
 
   // Devuelve true si el toque se ha usado para consultar un píxel
   function alTocarMapa(geo) {
+    if (h.marcando?.(geo)) return true;          // el profesor marca los puntos de un ejercicio
     if (!resultado || !est().visible || h.ocultando()) return false;
     const p = C.pixelDe(resultado.malla, geo.lat, geo.lon);
     if (!p || resultado.res.estado[p.r * resultado.malla.N + p.c] === C.PIXEL.FUERA) { cerrarFicha(); return false; }
@@ -548,6 +560,15 @@ export function iniciarCobertura(h) {
     alCambiarEjercicio() { pintarCapa(); pintarResultado(); if (seleccion && resultado) abrirFicha(seleccion.r, seleccion.c); },
     aplicarEstado() { escribirPanel(); comprobarVigencia(); },
     alTocarMapa,
+    calcular,
+    // Al cerrar un ejercicio sin permiso para ver la solución, el mapa calculado se descarta
+    borrar() {
+      if (trabajo) cancelar();
+      resultado = null; seleccion = null;
+      mapa.ponerCobertura(null); leyenda.hidden = true; cerrarFicha();
+      $('#cob-chip').hidden = true; $('#cob-resultado').hidden = true;
+      h.alCambiarResultado?.();
+    },
     get resultado() { return resultado; },
     get ocupado() { return !!trabajo; },
   };

@@ -72,6 +72,20 @@ export function puntosTrayecto(a, b, n) {
   return out;
 }
 
+// Punto del círculo máximo A→B en la fracción t de la distancia (0 = A, 1 = B),
+// con la misma interpolación que puntosTrayecto()
+export function puntoEnTrayecto(a, b, t) {
+  const dKm = distanciaKm(a, b), delta = dKm / R_TIERRA_KM;
+  if (delta < 1e-12) return { lat: a.lat, lon: a.lon, d: 0 };
+  const f1 = rad(a.lat), l1 = rad(a.lon), f2 = rad(b.lat), l2 = rad(b.lon);
+  const A = Math.sin((1 - t) * delta) / Math.sin(delta);
+  const B = Math.sin(t * delta) / Math.sin(delta);
+  const x = A * Math.cos(f1) * Math.cos(l1) + B * Math.cos(f2) * Math.cos(l2);
+  const y = A * Math.cos(f1) * Math.sin(l1) + B * Math.cos(f2) * Math.sin(l2);
+  const z = A * Math.sin(f1) + B * Math.sin(f2);
+  return { lat: deg(Math.atan2(z, Math.hypot(x, y))), lon: deg(Math.atan2(y, x)), d: t * dKm * 1000 };
+}
+
 // ---------- Propagación ----------
 export const perdidasEspacioLibre = (dKm, fMHz) => K_FSPL + 20 * log10(dKm) + 20 * log10(fMHz);
 
@@ -150,6 +164,37 @@ export function analizarPerfil({ perfil, hA, hB, fMHz, k, despejeMinimo = 0.6 })
     medio,
     faltan: perfil.filter((p) => p.z == null).length,
   };
+}
+
+// ---------- Altura mínima de las antenas (versión 1.4) ----------
+// Altura de mástil que hace falta para que la línea de visión despeje la
+// fracción «despejeMinimo» (60 %) del radio de la 1.ª zona de Fresnel en
+// TODO el trayecto, con el mismo criterio que analizarPerfil() (se excluyen
+// los extremos y los puntos sin cota).
+// En cada punto i (t = d1/d) la condición es
+//   y_LOS(i) = y_A·(1 − t) + y_B·t  ≥  z_i + h_i + c·r1_i  =  q_i
+// (h_i = flecha). La flecha y r1 no dependen de las alturas de las antenas,
+// así que la condición es lineal en y_A e y_B y la altura mínima es exacta:
+//   A (con B fija):        y_A ≥ (q_i − y_B·t) / (1 − t)
+//   B (con A fija):        y_B ≥ (q_i − y_A·(1 − t)) / t
+//   misma altura h en A y B: h ≥ q_i − z_A·(1 − t) − z_B·t
+// Se toma el máximo a lo largo del trayecto. Criterio del 60 %: UIT-R P.530 § 2.2.2.
+export function alturasMinimas(an, despejeMinimo = 0.6) {
+  const n = an.puntos.length, D = an.D;
+  const res = { despejeMinimo, a: null, b: null, igual: null, sinCota: 0 };
+  for (const p of an.puntos) {
+    if (p.i === 0 || p.i === n - 1) continue;
+    if (p.zEf == null) { res.sinCota++; continue; }
+    const t = p.d / D;
+    const q = p.zEf + despejeMinimo * p.r1;
+    const yA = (q - an.yB * t) / (1 - t);
+    const yB = (q - an.yA * (1 - t)) / t;
+    const hI = q - an.zA * (1 - t) - an.zB * t;
+    if (!res.a || yA > res.a.y) res.a = { y: yA, h: yA - an.zA, punto: p, q };
+    if (!res.b || yB > res.b.y) res.b = { y: yB, h: yB - an.zB, punto: p, q };
+    if (!res.igual || hI > res.igual.h) res.igual = { h: hI, punto: p, q };
+  }
+  return res;
 }
 
 // ---------- Difracción en filo de cuchillo (UIT-R P.526, § 4.1) ----------

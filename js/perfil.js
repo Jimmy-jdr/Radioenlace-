@@ -3,7 +3,8 @@
 // perfil.js — Gráfico del perfil del trayecto (SVG)
 // Dibuja: relieve (con curvatura k), línea de visión, 1.ª zona de
 // Fresnel, límite del 60 %, tramos invadidos, punto más comprometido y
-// cotas que faltan. Al tocar o pasar el dedo muestra los valores.
+// cotas que faltan y, si se pide, la altura mínima de las antenas (1.4).
+// Al tocar o pasar el dedo muestra los valores.
 // =====================================================================
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -36,7 +37,11 @@ export class GraficoPerfil {
   mensaje(texto) { this.vacio.textContent = texto; this.vacio.hidden = !texto; }
 
   // opciones.ocultar: modo ejercicio (no se señalan el punto crítico ni las invasiones)
-  pintar(analisis, opciones = {}) { this.an = analisis; this.ocultar = !!opciones.ocultar; this.mensaje(''); this.dibujar(); }
+  // opciones.altura: { yA, yB, punto, q } altura mínima de las antenas que se dibuja (o null)
+  pintar(analisis, opciones = {}) {
+    this.an = analisis; this.ocultar = !!opciones.ocultar; this.altura = this.ocultar ? null : opciones.altura || null;
+    this.mensaje(''); this.dibujar();
+  }
 
   dibujar() {
     const an = this.an;
@@ -51,6 +56,8 @@ export class GraficoPerfil {
       if (p.zEf != null) { ymin = Math.min(ymin, p.zEf, p.z); ymax = Math.max(ymax, p.zEf); }
       ymin = Math.min(ymin, p.los - p.r1); ymax = Math.max(ymax, p.los + p.r1);
     }
+    const alt = this.altura;
+    if (alt) { ymax = Math.max(ymax, alt.yA, alt.yB); ymin = Math.min(ymin, alt.yA, alt.yB); }
     if (!isFinite(ymin)) { ymin = 0; ymax = 100; }
     const rango = Math.max(ymax - ymin, 10);
     ymin -= rango * 0.06; ymax += rango * 0.1;
@@ -118,6 +125,18 @@ export class GraficoPerfil {
     const zA0 = P[0].zEf ?? an.zA, zB0 = P[P.length - 1].zEf ?? an.zB;
     partes.push(`<line class="mastil" x1="${X(0)}" x2="${X(0)}" y1="${Y(zA0)}" y2="${Y(an.yA)}"/><circle class="antena antena-a" cx="${X(0)}" cy="${Y(an.yA)}" r="6"/><text class="etiqueta-antena" x="${X(0) + 9}" y="${Y(an.yA) - 8}">A</text>`);
     partes.push(`<line class="mastil" x1="${X(D)}" x2="${X(D)}" y1="${Y(zB0)}" y2="${Y(an.yB)}"/><circle class="antena antena-b" cx="${X(D)}" cy="${Y(an.yB)}" r="6"/><text class="etiqueta-antena" x="${X(D) - 9}" y="${Y(an.yB) - 8}" text-anchor="end">B</text>`);
+
+    // Altura mínima (60 % de r1): mástiles prolongados, nueva línea de visión y punto que la limita
+    if (alt) {
+      partes.push(`<line class="mastil-min" x1="${X(0)}" x2="${X(0)}" y1="${Y(Math.min(an.yA, alt.yA))}" y2="${Y(Math.max(an.yA, alt.yA))}"/>`);
+      partes.push(`<line class="mastil-min" x1="${X(D)}" x2="${X(D)}" y1="${Y(Math.min(an.yB, alt.yB))}" y2="${Y(Math.max(an.yB, alt.yB))}"/>`);
+      partes.push(`<line class="los-min" x1="${X(0)}" y1="${Y(alt.yA)}" x2="${X(D)}" y2="${Y(alt.yB)}"/>`);
+      partes.push(`<circle class="antena-min" cx="${X(0)}" cy="${Y(alt.yA)}" r="4"/><circle class="antena-min" cx="${X(D)}" cy="${Y(alt.yB)}" r="4"/>`);
+      if (alt.punto) {
+        const x = X(alt.punto.d);
+        partes.push(`<line class="altmin-linea" x1="${x}" x2="${x}" y1="${Y(alt.punto.zEf)}" y2="${Y(alt.q)}"/><path class="altmin-punto" d="M${x - 6},${Y(alt.q)} l6,-6 l6,6 l-6,6 z"/>`);
+      }
+    }
 
     // Cotas que faltan
     for (const p of P) if (p.zEf == null) partes.push(`<line class="falta" x1="${X(p.d)}" x2="${X(p.d)}" y1="${H - m.b - 7}" y2="${H - m.b}"/>`);

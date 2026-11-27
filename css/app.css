@@ -489,3 +489,106 @@ sub, sup { font-size: .72em; line-height: 0; }
 .cob-ficha .nota { font-size: 12px; color: #56656e; }
 @media (max-width: 520px) { .cob-leyenda:not(.plegada) { max-width: calc(100% - 70px); } }
 @media (max-width: 520px) { .cob-ficha .nota { display: none; } .cob-ficha { padding: 8px 10px; } .cob-ficha .boton { margin-top: 6px; } }
+
+/* ---------- Versión 1.4: altura mínima, ejercicios y código QR ---------- */
+.mal-texto { color: var(--mal); font-weight: 600; }
+#app.ejercicio .solo-sin-ejercicio { display: none; }
+
+/* Altura mínima de las antenas (perfil) */
+.altmin { margin-top: 10px; border-top: 1px solid var(--linea); padding-top: 4px; }
+.altmin > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; font-size: 15px; }
+.altmin-cuerpo .nota:first-child { margin-top: 0; }
+.tabla-altmin { border-collapse: collapse; width: 100%; font-size: 14px; margin: 6px 0; }
+.tabla-altmin th, .tabla-altmin td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+.tabla-altmin th { color: var(--suave); font-weight: 600; font-size: 13px; }
+.tabla-altmin .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.altmin-acciones { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.altmin-acciones .campo { flex: 1 1 14em; }
+.altmin-acciones .boton { margin-top: 0; flex: 1 1 12em; }
+.boton:disabled { opacity: .5; cursor: not-allowed; }
+.leyenda i.l-altmin { background: none; border-top: 2px dashed #8a3ffc; height: 0; border-radius: 0; }
+svg .los-min { stroke: #8a3ffc; stroke-width: 2; stroke-dasharray: 7 4; fill: none; }
+svg .mastil-min { stroke: #8a3ffc; stroke-width: 3; stroke-dasharray: 4 3; }
+svg .antena-min { fill: #fff; stroke: #8a3ffc; stroke-width: 2; }
+svg .altmin-linea { stroke: #8a3ffc; stroke-width: 1.5; stroke-dasharray: 3 3; }
+svg .altmin-punto { fill: #8a3ffc; stroke: #fff; stroke-width: 1.5; }
+@media (prefers-color-scheme: dark) {
+  .leyenda i.l-altmin { border-top-color: #c29bff; }
+  svg .los-min, svg .mastil-min, svg .antena-min, svg .altmin-linea { stroke: #c29bff; }
+  svg .altmin-punto { fill: #c29bff; stroke: #0c1316; }
+  svg .antena-min { fill: #0c1316; }
+}
+
+/* Respuestas del alumno (Cálculos) */
+.respuestas { margin-bottom: 12px; }
+.tabla-desliza { overflow-x: auto; }
+.tabla-resp { border-collapse: collapse; width: 100%; font-size: 14px; }
+.tabla-resp th, .tabla-resp td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--linea); vertical-align: middle; }
+.tabla-resp th { color: var(--suave); font-weight: 600; font-size: 13px; }
+.tabla-resp td:first-child { min-width: 11em; }
+.tabla-resp .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.tabla-resp .num small { font-weight: 400; color: var(--suave); }
+.tabla-resp .marca { white-space: nowrap; min-width: 7em; }
+.con-ud { display: flex; align-items: center; gap: 6px; min-width: 9em; }
+.con-ud input { min-width: 6em; }
+.con-ud span { color: var(--suave); font-size: 14px; min-width: 2.4em; }
+.resumen-resp { font-size: 16px; margin: 10px 0 0; }
+
+/* Ejercicio de cobertura (Enlace) */
+.ej-cob { border: 2px solid #f0b44c; }
+.lista-puntos { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 8px; }
+.lista-puntos li { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--linea); }
+.punto-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.punto-cab .coord { color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pastilla-p { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 99px; background: #6b2fd6; color: #fff; font-size: 13px; }
+.punto-resp { display: flex; gap: 8px; flex-wrap: wrap; }
+.punto-resp select { flex: 1 1 16em; }
+.punto-resp .boton { margin-top: 0; }
+.punto-marca { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.punto-marca .sol { color: var(--tinta); font-weight: 600; }
+.marcador-punto span { background: #6b2fd6; width: 30px; height: 30px; }
+.marcador-punto b { font-size: 12px; }
+
+/* Hojas de los ejercicios y del QR */
+.hoja > div { max-height: calc(100dvh - 24px); overflow-y: auto; }
+.hoja h4 { margin: 14px 0 4px; font-size: 15px; }
+.hoja .campo { margin-top: 8px; }
+.hoja textarea { width: 100%; border-radius: 10px; border: 1px solid var(--linea); background: var(--campo); padding: 8px 10px; font-size: 16px; font-family: inherit; color: inherit; }
+.hoja .botones-exportar .boton { flex: 1 1 10em; }
+.hoja > div > .boton:last-child { width: 100%; }
+.interruptor { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; }
+.interruptor input { width: 20px; height: 20px; }
+.ej-creado { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--linea); }
+.codigo-ej { font-size: 15px; margin: 0; }
+.codigo-ej b { font-size: 20px; letter-spacing: .08em; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.fila-n { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.fila-n .campo { width: 6em; }
+.fila-n .boton { flex: 1 1 14em; }
+.qr-que { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 15px; }
+.qr-que label { display: flex; align-items: center; gap: 6px; min-height: 40px; }
+.qr-imagen { display: grid; place-items: center; background: #fff; border-radius: 10px; padding: 8px; margin-top: 6px; }
+.qr-imagen svg { width: min(100%, 320px); height: auto; display: block; }
+.qr-grande { position: fixed; inset: 0; z-index: 80; background: #fff; display: grid; place-items: center; align-content: center; gap: 8px; cursor: zoom-out; }
+.qr-grande[hidden] { display: none; }
+.qr-grande svg { width: min(92vw, 86vh); height: auto; }
+.qr-grande p { margin: 0; color: #56656e; font-size: 14px; }
+.banda-marcar {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 55; background: #6b2fd6; color: #fff; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px 14px; padding: calc(8px + var(--sup)) 14px 8px;
+}
+.banda-marcar[hidden] { display: none; }
+.banda-marcar p { margin: 0; flex: 1 1 18em; font-size: 15px; }
+.banda-marcar .botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.banda-marcar .boton { margin-top: 0; background: #fff; color: #6b2fd6; }
+.banda-marcar .boton.secundario { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .6); }
+.fila-botones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.fila-botones .boton { margin-top: 0; flex: 1 1 14em; }
+.enunciado .parrafo { display: block; margin-top: 4px; }
+@media (max-width: 560px) {
+  .tabla-resp thead { display: none; }
+  .tabla-resp tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--linea); }
+  .tabla-resp td { border-bottom: 0; padding: 2px 0; }
+  .tabla-resp td:first-child { grid-column: 1 / -1; min-width: 0; font-weight: 600; }
+  .tabla-resp td.num { grid-column: 1 / -1; text-align: left; }
+  .tabla-resp .marca { min-width: 0; align-self: center; }
+}

@@ -167,15 +167,16 @@ export class Mapa {
     }
   }
 
-  ponerMarcador(id, pos, etiqueta) {
+  // clase: estilo adicional (p. ej. «marcador-punto» para los puntos de un ejercicio)
+  ponerMarcador(id, pos, etiqueta, clase = '') {
     let m = this.marcadores.get(id);
     if (!m) {
       const el = document.createElement('div');
-      el.className = `mapa-marcador marcador-${id.toLowerCase()}`;
+      el.className = `mapa-marcador marcador-${id.toLowerCase()} ${clase}`.trim();
       el.dataset.id = id;
       el.innerHTML = `<span><b>${etiqueta}</b></span>`;
       el.setAttribute('role', 'img');
-      el.setAttribute('aria-label', `Emplazamiento ${etiqueta}`);
+      el.setAttribute('aria-label', clase ? `Punto ${etiqueta}` : `Emplazamiento ${etiqueta}`);
       this.capaMarcadores.appendChild(el);
       m = { el, pos };
       this.marcadores.set(id, m);
@@ -183,6 +184,13 @@ export class Mapa {
     }
     m.pos = { ...pos };
     this.dibujar();
+  }
+
+  quitarMarcador(id) {
+    const m = this.marcadores.get(id);
+    if (!m) return;
+    m.el.remove();
+    this.marcadores.delete(id);
   }
 
   // Capa de cobertura: imagen N × N en latitud/longitud (fila 0 al norte)

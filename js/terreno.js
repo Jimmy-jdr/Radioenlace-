@@ -25,7 +25,7 @@
 // actualizar la app («radioenlace-relieve»): el punto a punto y los mapas
 // de cobertura funcionan sin conexión en las zonas ya descargadas.
 // =====================================================================
-import { distanciaKm, puntosTrayecto } from './radio.js';
+import { distanciaKm, puntosTrayecto, puntoEnTrayecto } from './radio.js';
 
 export const WCS_IGN = 'https://servicios.idee.es/wcs-inspire/mdt';
 export const API_COPERNICUS = 'https://api.open-meteo.com/v1/elevation';
@@ -58,6 +58,12 @@ export const FUENTES = {
     id: 'plano', celdaM: null,
     nombre: 'Terreno plano teórico (cota 0 m)',
     resolucion: 'sin relieve; solo curvatura terrestre',
+    enlace: null,
+  },
+  obstaculo: {
+    id: 'obstaculo', celdaM: null,
+    nombre: 'Terreno plano teórico (cota 0 m) con un obstáculo agudo',
+    resolucion: 'sin relieve salvo el obstáculo (filo de cuchillo); curvatura terrestre',
     enlace: null,
   },
 };
@@ -374,9 +380,25 @@ export function bloquesDudosos(alm, caja, clavesTeselas) {
 // Perfil A → B (común al punto a punto y a cada píxel de la cobertura)
 // ---------------------------------------------------------------------
 // modo: 'ign' (relieve real) o 'plano' (ejercicio teórico)
-export function puntosPerfil(a, b, modo = 'ign') {
+// modo 'obstaculo' (versión 1.4): plano con un obstáculo agudo de cota obst.z (m)
+// a obst.d (km) de A, añadido como un punto más del perfil en su distancia exacta.
+export function puntosPerfil(a, b, modo = 'ign', obst = null) {
   const dKm = distanciaKm(a, b);
-  if (modo === 'plano' || dKm === 0) {
+  if (modo === 'obstaculo' && dKm > 0) {
+    const base = puntosPerfil(a, b, 'plano');
+    const D = dKm * 1000, dO = obstaculoValido(obst, dKm) ? obst.d * 1000 : null;
+    const puntos = base.puntos;
+    if (dO != null) {
+      const igual = puntos.findIndex((p) => Math.abs(p.d - dO) < 1e-6);
+      if (igual >= 0) Object.assign(puntos[igual], { z: obst.z, origen: 'obstaculo' });
+      else {
+        const q = puntoEnTrayecto(a, b, dO / D);
+        puntos.splice(puntos.findIndex((p) => p.d > dO), 0, { lat: q.lat, lon: q.lon, d: dO, z: obst.z, origen: 'obstaculo' });
+      }
+    }
+    return { dKm, n: puntos.length, fuente: FUENTES.obstaculo, paso: base.paso, puntos };
+  }
+  if (modo === 'plano' || modo === 'obstaculo' || dKm === 0) {
     const n = 241;
     return { dKm, n, fuente: FUENTES.plano, paso: (dKm * 1000) / (n - 1), puntos: puntosTrayecto(a, b, n).map((p) => ({ ...p, z: 0, origen: 'plano' })) };
   }
@@ -391,11 +413,21 @@ export function contarFuentes(puntos) {
   return porFuente;
 }
 
-export async function obtenerPerfil(a, b, { modo = 'ign', señal, alProgreso } = {}) {
-  const base = puntosPerfil(a, b, modo);
+// Obstáculo dentro del trayecto (sin tocar los extremos) y con cota válida
+export function obstaculoValido(o, dKm) {
+  return !!o && Number.isFinite(o.d) && Number.isFinite(o.z) && o.d > 0 && o.d < dKm && o.z >= 0 && o.z <= 9000;
+}
+
+export async function obtenerPerfil(a, b, { modo = 'ign', obstaculo = null, señal, alProgreso } = {}) {
+  const base = puntosPerfil(a, b, modo, obstaculo);
   const { puntos, fuente, n, paso } = base;
   const avisos = [];
   if (fuente.id === 'plano') return { puntos, fuente, paso, avisos, faltan: 0, porFuente: { plano: n } };
+  if (fuente.id === 'obstaculo') {
+    const conObst = puntos.some((p) => p.origen === 'obstaculo');
+    if (!conObst) avisos.push('El obstáculo no está dentro del trayecto A–B: el perfil es plano.');
+    return { puntos, fuente, paso, avisos, faltan: 0, porFuente: contarFuentes(puntos) };
+  }
 
   const alm = nuevoAlmacen(fuente);
   let erroresIGN = [];

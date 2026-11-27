@@ -19,7 +19,7 @@ export const FUENTES_BIBLIO = [
   {
     ref: 'Recomendación UIT-R P.530 (versión vigente)',
     titulo: 'Datos de propagación y métodos de predicción para el diseño de sistemas terrenales con visibilidad directa',
-    uso: 'Radio de la 1.ª zona de Fresnel F1 = 17,3·√(d1·d2/(f·d)); factor k con valor mediano ≈ 4/3; criterios de despeje para el diseño de enlaces reales.',
+    uso: 'Radio de la 1.ª zona de Fresnel F1 = 17,3·√(d1·d2/(f·d)); factor k con valor mediano ≈ 4/3; § 2.2.2: despeje de al menos el 60 % de F1 para condiciones de espacio libre (altura mínima de las antenas) y criterios de despeje para el diseño de enlaces reales.',
     url: 'https://www.itu.int/rec/R-REC-P.530/es',
   },
   {
@@ -57,6 +57,18 @@ export const FUENTES_BIBLIO = [
     titulo: 'Un perfil propio desde el transmisor hasta el centro de cada píxel, con el mismo cálculo punto a punto',
     uso: 'Cada píxel da exactamente lo mismo que el enlace A–B con B en su centro (mismas teselas fijas del MDT, mismo número de cotas, mismo modelo y mismo presupuesto). Se ha contrastado una muestra de píxeles con la referencia C++ del NTIA.',
     url: '',
+  },
+  {
+    ref: 'Altura mínima de las antenas (versión 1.4)',
+    titulo: 'Condición de despeje lineal en la cota de cada antena',
+    uso: 'La flecha y r1 no dependen de las alturas: y_A·(1 − t) + y_B·t ≥ z + h + 0,6·r1 en cada punto, de donde se despeja la altura mínima exacta de A, de B o de ambas; manda el punto más exigente.',
+    url: '',
+  },
+  {
+    ref: 'ISO/IEC 18004:2015 · QR Code bar code symbology specification',
+    titulo: 'Código QR (modelo 2)',
+    uso: 'Código QR generado en la propia app: modo byte (UTF-8), corrección Reed–Solomon nivel M, máscaras y penalizaciones de la norma. Contrastado bit a bit con OpenCV.',
+    url: 'https://www.iso.org/standard/62021.html',
   },
   {
     ref: 'Geodesia esférica: fórmula del semiverseno (haversine)',

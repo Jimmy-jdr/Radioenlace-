@@ -225,6 +225,19 @@ export function filasInforme(ctx) {
     an.invasiones.forEach((t, i) => filas.push(fila(R, `Tramo invadido ${i + 1}`, '', '',
       `${numT(t.desde / 1000, 3)} a ${numT(t.hasta / 1000, 3)} km desde A${t.obstruye ? ' (corta la línea de visión)' : ''}`, '', false)));
   }
+  // 7 bis. Altura mínima de las antenas para despejar el 60 % (versión 1.4)
+  const alt = ctx.alt;
+  if (an && alt?.b && alt.a && alt.igual) {
+    const H = 'Altura mínima de las antenas (60 % de r1)';
+    const txt = (x) => (x <= 0 ? 'cualquier altura (≥ 0 m)' : num(x, 2));
+    const donde = (p) => `${numT(p.d / 1000, 3)} km desde A (cota ${numT(p.z, 1)} m)`;
+    filas.push(fila(H, 'Antena B con A a su altura actual (h_B,mín)', F('altmin'), S('altmin'), txt(alt.b.h), 'm', alt.b.h > 0));
+    filas.push(fila(H, 'Punto que limita la altura de B', '', '', donde(alt.b.punto), '', false));
+    filas.push(fila(H, 'Antena A con B a su altura actual (h_A,mín)', 'y_A,mín = máx [(z + h + 0,6·r1 − y_B·t) / (1 − t)]; h_A,mín = y_A,mín − z_A', '', txt(alt.a.h), 'm', alt.a.h > 0));
+    filas.push(fila(H, 'Punto que limita la altura de A', '', '', donde(alt.a.punto), '', false));
+    filas.push(fila(H, 'Misma altura en A y en B (h_mín)', 'h_mín = máx [z + h + 0,6·r1 − z_A·(1 − t) − z_B·t]', '', txt(alt.igual.h), 'm', alt.igual.h > 0));
+    filas.push(fila(H, 'Punto que limita la misma altura en A y B', '', '', donde(alt.igual.punto), '', false));
+  }
   // 8. Difracción en el obstáculo principal (solo sin Longley–Rice) y evaluación global
   const dif = ctx.dif;
   if (an && an.peor && dif) {
@@ -246,7 +259,7 @@ export function filasInforme(ctx) {
 // ---------------------------------------------------------------------
 // Perfil completo: una fila por punto
 // ---------------------------------------------------------------------
-const ORIGEN = { mdt25: 'IGN MDT25', mdt200: 'IGN MDT200', copernicus: 'Copernicus GLO-90', plano: 'plano teórico' };
+const ORIGEN = { mdt25: 'IGN MDT25', mdt200: 'IGN MDT200', copernicus: 'Copernicus GLO-90', plano: 'plano teórico', obstaculo: 'obstáculo teórico' };
 
 export function filasPerfil(an, perfil) {
   const cab = ['punto', 'distancia desde A (km)', 'latitud (°)', 'longitud (°)', 'cota del terreno (m)', 'origen de la cota',

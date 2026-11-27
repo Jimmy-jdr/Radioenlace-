@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Radioenlace PtP</title>
-  <meta name="description" content="Radioenlace PtP (Point-to-Point): planificación y estudio de radioenlaces punto a punto con el perfil del terreno del IGN, zona de Fresnel, curvatura terrestre, presupuesto de enlace, modelo Longley–Rice y mapas de cobertura, paso a paso.">
+  <meta name="description" content="Radioenlace PtP (Point-to-Point): planificación y estudio de radioenlaces punto a punto con el perfil del terreno del IGN, zona de Fresnel, curvatura terrestre, presupuesto de enlace, modelo Longley–Rice, mapas de cobertura y ejercicios aleatorios con comprobación, paso a paso.">
   <meta name="author" content="Jaime Díaz Rodríguez (Jimmy-jdr)">
   <meta name="copyright" content="© 2026 Jaime Díaz Rodríguez · CC BY-NC-ND 4.0">
   <link rel="license" href="https://creativecommons.org/licenses/by-nc-nd/4.0/">
@@ -21,7 +21,7 @@
   <meta name="format-detection" content="telephone=no">
   <link rel="stylesheet" href="css/app.css">
   <!-- Estadísticas anónimas y sin cookies (GoatCounter): visitas, instalaciones, aperturas, mapas de cobertura y descargas. Sin contador visible. -->
-  <!-- Solo se envía la ruta de la página: nunca los datos de los enlaces compartidos (?e=…) -->
+  <!-- Solo se envía la ruta de la página: nunca los datos de los enlaces compartidos (?e=…, ?z=…, ?g=…) -->
   <script>window.goatcounter = { path: function () { return location.pathname; } };</script>
   <script data-goatcounter="https://radioenlace.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </head>
@@ -109,6 +109,7 @@
               <label class="opacidad">Opacidad <input type="range" id="cob-opacidad" min="10" max="100" step="5"></label>
             </div>
             <p class="nota solo-ejercicio">En modo ejercicio el mapa se muestra al pulsar «Comprobar resultados».</p>
+            <div class="cob-botones solo-sin-ejercicio"><button type="button" id="cob-crear-ej" class="boton secundario">Crear ejercicio con este mapa…</button></div>
           </div>
           <details id="cob-zonas-det" class="cob-zonas">
             <summary>Relieve guardado para usar sin conexión</summary>
@@ -119,6 +120,7 @@
     </section>
 
     <div class="col-enlace">
+      <section id="ej-cob" class="tarjeta ej-cob" hidden aria-live="polite"></section>
       <section id="s-resumen" class="tarjeta resumen" aria-live="polite">
         <div class="tarjeta-cab"><h2>Resumen</h2><span id="chip-perfil" class="chip solo-revelado">…</span></div>
         <p id="sum-veredicto" class="veredicto-global solo-revelado"><b id="sum-titulo">Calculando…</b> <span id="sum-texto"></span></p>
@@ -145,12 +147,36 @@
         <li><i class="l-60"></i>Límite del 60 %</li>
         <li><i class="l-inv"></i>Invasión del 60 %</li>
         <li><i class="l-falta"></i>Cota que falta</li>
+        <li id="ley-altmin" hidden><i class="l-altmin"></i>Altura mínima (60 %)</li>
       </ul>
       <div class="rapidos">
         <label><span>Antena A</span><input id="r-ha" type="range" min="0" max="120" step="1"><b id="v-ha"></b></label>
         <label><span>Antena B</span><input id="r-hb" type="range" min="0" max="120" step="1"><b id="v-hb"></b></label>
         <label><span>Frecuencia</span><input id="r-f" type="range" min="0" max="1000" step="1"><b id="v-f"></b></label>
       </div>
+      <details id="altmin" class="altmin">
+        <summary>Altura mínima de las antenas (60 % de r₁)</summary>
+        <div class="altmin-cuerpo">
+          <p class="nota solo-ejercicio">En modo ejercicio se muestra al pulsar «Comprobar resultados».</p>
+          <div class="solo-revelado">
+            <p class="nota">Altura de mástil con la que la línea de visión deja libre al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k de «Datos» (criterio de la UIT-R P.530, § 2.2.2). Se redondea hacia arriba al decímetro.</p>
+            <table class="tabla-altmin">
+              <thead><tr><th>Antena</th><th>Altura mínima</th><th>Punto que la limita</th></tr></thead>
+              <tbody id="altmin-filas"></tbody>
+            </table>
+            <div class="altmin-acciones">
+              <div class="campo"><label for="altmin-var">Dibujar en el perfil y aplicar</label>
+                <select id="altmin-var">
+                  <option value="b">B, con A a su altura actual</option>
+                  <option value="a">A, con B a su altura actual</option>
+                  <option value="igual">La misma altura en A y en B</option>
+                </select></div>
+              <button type="button" id="altmin-aplicar" class="boton secundario">Aplicar esta altura</button>
+            </div>
+            <p id="altmin-nota" class="nota"></p>
+          </div>
+        </div>
+      </details>
       <details class="fuente-relieve">
         <summary>Fuente y resolución del relieve</summary>
         <div id="fuente"><p class="nota">Pendiente de descarga…</p></div>
@@ -164,7 +190,7 @@
     <section id="s-datos" class="tarjeta">
       <div class="tarjeta-cab">
         <h2>Datos del enlace</h2>
-        <label class="ejemplos"><span>Cargar ejemplo</span><select id="ejemplo"></select></label>
+        <label class="ejemplos"><span>Cargar ejemplo o ejercicio</span><select id="ejemplo"></select></label>
       </div>
       <form id="formulario" autocomplete="off" onsubmit="return false">
         <div class="tabla-sitios">
@@ -243,7 +269,16 @@
             <select id="terreno">
               <option value="ign">Real · MDT del IGN/CNIG</option>
               <option value="plano">Plano teórico (ejercicios)</option>
+              <option value="obstaculo">Plano con un obstáculo agudo (ejercicios)</option>
             </select>
+          </div>
+          <div class="campo obst-campo" hidden>
+            <label for="obs-d">Obstáculo: distancia a A (km)</label>
+            <input id="obs-d" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small>
+          </div>
+          <div class="campo obst-campo" hidden>
+            <label for="obs-z">Obstáculo: cota de la cima (m)</label>
+            <input id="obs-z" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small>
           </div>
           <div class="campo">
             <label for="modelo">Modelo de propagación</label>
@@ -291,6 +326,7 @@
   <section id="v-calculos" class="vista vista-calculos" role="tabpanel" aria-labelledby="t-calculos" hidden>
     <div id="enunciado" class="enunciado" hidden><h3 id="enunciado-titulo"></h3><p id="enunciado-texto"></p></div>
     <div id="comprobacion" class="comprobacion tarjeta solo-revelado" hidden></div>
+    <section id="ej-respuestas" class="tarjeta respuestas" hidden aria-live="polite"></section>
     <div id="s-resultados" class="area-res">
       <article class="tarjeta resultado">
         <div class="tarjeta-cab"><h2 id="tit-presupuesto">Presupuesto en espacio libre</h2></div>
@@ -360,8 +396,19 @@
   <section id="v-descargas" class="vista vista-descargas" role="tabpanel" aria-labelledby="t-descargas" hidden>
     <article class="tarjeta">
       <div class="tarjeta-cab"><h2>Compartir</h2></div>
-      <p class="nota">Crea un enlace con todos los datos de este radioenlace. Si el modo ejercicio está activo, el enlace abre el ejercicio con los resultados ocultos. Puedes convertirlo en un código QR para la pizarra.</p>
-      <button type="button" id="btn-compartir" class="boton">Compartir enlace</button>
+      <p class="nota">Crea un enlace con todos los datos de este radioenlace. Si el modo ejercicio está activo, el enlace abre el ejercicio con los resultados ocultos. El código QR se genera aquí mismo, también sin conexión, para proyectarlo o imprimirlo.</p>
+      <div class="fila-botones">
+        <button type="button" id="btn-compartir" class="boton">Compartir enlace</button>
+        <button type="button" id="btn-qr" class="boton secundario">Código QR</button>
+      </div>
+    </article>
+
+    <article class="tarjeta">
+      <div class="tarjeta-cab"><h2>Ejercicios para clase</h2></div>
+      <p class="nota">Crea un ejercicio aleatorio con comprobación automática: cada alumno escribe su número de lista y recibe datos distintos. Para un ejercicio con el mapa de cobertura, calcula antes el mapa (pestaña <a href="#enlace" class="enlace-vista">Enlace</a>) y pulsa «Crear ejercicio con este mapa».</p>
+      <div class="fila-botones">
+        <button type="button" id="btn-ej-aleatorio" class="boton">Ejercicio aleatorio…</button>
+      </div>
     </article>
 
     <article class="tarjeta">
@@ -418,7 +465,7 @@
   <footer class="pie">
     <p class="autoria"><b id="pie-nombre">Radioenlace PtP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a id="pie-registro" href="https://www.safecreative.org/work/2611277780168" target="_blank" rel="noopener">2611277780168</a>.</p>
     <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
-    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión <span id="pie-version">1.3.2</span> · espacio libre, Longley–Rice (ITM), Fresnel, difracción en filo de cuchillo y mapas de cobertura.</p>
+    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión <span id="pie-version">1.4.0</span> · espacio libre, Longley–Rice (ITM), Fresnel, difracción en filo de cuchillo, mapas de cobertura, altura mínima de antenas, ejercicios aleatorios y código QR.</p>
     <p>Estadísticas de uso anónimas y sin cookies (GoatCounter).</p>
   </footer>
 </div>
@@ -444,6 +491,73 @@
 </div>
 <div id="enlace-manual" class="hoja" hidden>
   <div><h3>Copia este enlace</h3><input type="text" readonly aria-label="Enlace para compartir"><button type="button" class="boton" onclick="this.closest('.hoja').hidden=true">Cerrar</button></div>
+</div>
+<div id="hoja-ej" class="hoja" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="hoja-ej-tit">
+    <h3 id="hoja-ej-tit">Ejercicio aleatorio</h3>
+    <p class="nota">Cada alumno abre el enlace, escribe su número de lista y recibe sus propios datos (los mismos en cualquier dispositivo). Escribe sus resultados y la app le dice cuáles son correctos.</p>
+    <div class="campo"><label for="ej-nivel">Nivel</label><select id="ej-nivel"></select></div>
+    <p id="ej-nivel-texto" class="nota"></p>
+    <label class="interruptor"><input type="checkbox" id="ej-sol" checked> Permitir ver la solución</label>
+    <button type="button" id="ej-crear" class="boton">Crear ejercicio</button>
+    <div id="ej-creado" class="ej-creado" hidden></div>
+    <button type="button" class="boton secundario cerrar-hoja">Cerrar</button>
+  </div>
+</div>
+<div id="hoja-ejcob" class="hoja" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="hoja-ejcob-tit">
+    <h3 id="hoja-ejcob-tit">Ejercicio con el mapa de cobertura</h3>
+    <p class="nota">El alumno calcula el mapa (con los mismos datos) y decide si la señal llega a cada punto y con qué margen.</p>
+    <div class="rejilla-cob">
+      <div class="campo"><label for="ejcob-modo">Modo</label>
+        <select id="ejcob-modo"><option value="prediccion">Predicción: el mapa se ve al final</option><option value="lectura">Lectura: el mapa se ve desde el principio</option></select></div>
+      <div class="campo"><label for="ejcob-puntos">Puntos</label>
+        <select id="ejcob-puntos"><option value="aleatorios">Aleatorios, distintos por alumno</option><option value="fijos">Los marco yo en el mapa</option></select></div>
+      <div class="campo"><label for="ejcob-n">Número de puntos</label>
+        <select id="ejcob-n"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option></select></div>
+    </div>
+    <label class="interruptor"><input type="checkbox" id="ejcob-sol" checked> Permitir ver la solución</label>
+    <button type="button" id="ejcob-crear" class="boton">Crear ejercicio</button>
+    <div id="ejcob-creado" class="ej-creado" hidden></div>
+    <button type="button" class="boton secundario cerrar-hoja">Cerrar</button>
+  </div>
+</div>
+<div id="hoja-id" class="hoja" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="hoja-id-tit">
+    <h3 id="hoja-id-tit">Ejercicio</h3>
+    <p id="hoja-id-texto"></p>
+    <div class="campo"><label for="id-alumno">Tu número de lista (o el identificador que te diga el profesor)</label>
+      <input id="id-alumno" type="text" autocomplete="off" enterkeyhint="go" maxlength="40"><small class="error"></small></div>
+    <p class="nota">Con el mismo identificador obtendrás siempre los mismos datos.</p>
+    <button type="button" id="id-empezar" class="boton">Empezar</button>
+    <button type="button" id="id-cancelar" class="boton secundario">Cancelar</button>
+  </div>
+</div>
+<div id="hoja-qr" class="hoja" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="hoja-qr-tit">
+    <h3 id="hoja-qr-tit">Código QR</h3>
+    <div class="qr-que" role="radiogroup" aria-label="Qué dirección lleva el código">
+      <label><input type="radio" name="qr-que" value="enlace" checked> <span id="qr-que-enlace">Este enlace</span></label>
+      <label><input type="radio" name="qr-que" value="app"> La app (sin datos)</label>
+    </div>
+    <div id="qr-imagen" class="qr-imagen"></div>
+    <p id="qr-info" class="nota"></p>
+    <div class="botones-exportar">
+      <button type="button" id="qr-pantalla" class="boton">Pantalla completa</button>
+      <button type="button" id="qr-png" class="boton secundario">PNG</button>
+      <button type="button" id="qr-svg" class="boton secundario">SVG</button>
+    </div>
+    <button type="button" class="boton secundario cerrar-hoja">Cerrar</button>
+  </div>
+</div>
+<div id="qr-grande" class="qr-grande" hidden role="dialog" aria-label="Código QR a pantalla completa (toca para cerrar)"></div>
+<div id="banda-marcar" class="banda-marcar" hidden>
+  <p id="banda-marcar-texto">Toca el mapa para marcar los puntos.</p>
+  <div class="botones">
+    <button type="button" id="marcar-deshacer" class="boton secundario">Deshacer</button>
+    <button type="button" id="marcar-terminar" class="boton">Terminar</button>
+    <button type="button" id="marcar-cancelar" class="boton secundario">Cancelar</button>
+  </div>
 </div>
 <noscript><p style="padding:1em">Esta aplicación necesita JavaScript.</p></noscript>
 <script type="module" src="js/app.js"></script>

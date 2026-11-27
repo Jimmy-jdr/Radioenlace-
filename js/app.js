@@ -17,6 +17,9 @@ import { evaluarEnlace } from './veredicto.js';
 import { FUENTES_BIBLIO } from './fuentes.js';
 import { iniciarCobertura } from './cobertura-ui.js';
 import { normalizarCobertura, COB_DEFECTO } from './cobertura.js';
+import { iniciarEjercicios } from './ejercicios-ui.js';
+import { paramAConfig, normalizarGenerado, normalizarEjCob } from './ejercicios.js';
+import { codificarDatos, decodificarDatos } from './enlace.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -41,20 +44,30 @@ let ultimoContexto = null;  // lo que se exporta a CSV
 let revelado = false;       // modo ejercicio: resultados visibles tras «Comprobar»
 let avisoNinguno = false;   // aviso único al tocar el mapa con «Ninguno»
 let cob = null;             // mapas de cobertura (cobertura-ui.js)
+let ej = null;              // ejercicios aleatorios, de cobertura y código QR (ejercicios-ui.js, versión 1.4)
+let configPendiente = null; // ?g=…: ejercicio aleatorio que espera el identificador del alumno
+let avisoInicial = '';
 
 function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
   return JSON.parse(JSON.stringify({
     ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'ninguno',
     plano: { formato: 'A4', exag: 10 }, itm: { ...ITM_DEFECTO }, cobertura: { ...COB_DEFECTO },
+    obstaculo: { d: 5, z: 50 }, altmin: 'b',
   }));
 }
 
-function estadoInicial() {
+// Enlaces: ?e=… (todas las versiones), ?z=… (comprimido, 1.4) y ?g=… (ejercicio aleatorio, 1.4)
+async function estadoInicial() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('g')) {
+    configPendiente = paramAConfig(q.get('g'));
+    if (!configPendiente) avisoInicial = 'El enlace del ejercicio no es válido.';
+  }
   try {
-    const q = new URLSearchParams(location.search).get('e');
-    if (q) return validar(JSON.parse(decodeURIComponent(escape(atob(q.replace(/-/g, '+').replace(/_/g, '/'))))));
-  } catch { /* enlace no válido: se ignora */ }
+    const d = await decodificarDatos(q);
+    if (d) return validar(d);
+  } catch (e) { avisoInicial = e.message?.startsWith('Este navegador') ? e.message : 'El enlace no es válido: se abren los últimos datos guardados.'; }
   try {
     const g = localStorage.getItem(CLAVE);
     if (g) return validar(JSON.parse(g));
@@ -67,6 +80,15 @@ function validar(s) {
   if (!s || !s.a || !s.b || !isFinite(s.a.lat) || !isFinite(s.b.lat)) return base;
   const r = { ...base, ...s, a: { ...base.a, ...s.a }, b: { ...base.b, ...s.b }, f: { ...base.f, ...s.f }, p: { ...base.p, ...s.p }, plano: { ...base.plano, ...s.plano } };
   if (!['A', 'B', 'ninguno'].includes(r.colocar)) r.colocar = 'ninguno';
+  if (!['ign', 'plano', 'obstaculo'].includes(r.terreno)) r.terreno = 'ign';
+  r.obstaculo = { ...base.obstaculo, ...s.obstaculo };
+  if (!(Number.isFinite(+r.obstaculo.d) && Number.isFinite(+r.obstaculo.z))) r.obstaculo = { ...base.obstaculo };
+  r.obstaculo = { d: +r.obstaculo.d, z: +r.obstaculo.z };
+  if (!['a', 'b', 'igual'].includes(r.altmin)) r.altmin = 'b';
+  r.generado = normalizarGenerado(s.generado);
+  r.ejcob = normalizarEjCob(s.ejcob);
+  if (!r.generado) delete r.generado;
+  if (!r.ejcob) delete r.ejcob;
   if (!['A4', 'A3'].includes(r.plano.formato)) r.plano.formato = 'A4';
   if (![1, 5, 10, 20].includes(+r.plano.exag)) r.plano.exag = 10;
   if (!MODELOS.some((m) => m.id === r.modelo && m.disponible)) r.modelo = 'espacio-libre';
@@ -79,10 +101,22 @@ function guardar() {
   try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch { /* modo privado */ }
 }
 
-function enlaceCompartir() {
-  const { colocar, ...datos } = estado;
-  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(datos)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return `${location.origin}${location.pathname}?e=${b64}`;
+const urlApp = () => `${location.origin}${location.pathname}`;
+async function enlaceDe(datos) {
+  const { clave, valor } = await codificarDatos(datos);
+  return `${urlApp()}?${clave}=${valor}`;
+}
+// Ejercicio aleatorio: solo su configuración (?g=); ejercicio de cobertura: los datos
+// sin el identificador ni las respuestas del alumno; si no, todos los datos.
+async function enlaceCompartir() {
+  if (estado.generado && estado.ejercicio) return ej.urlEjercicio(estado.generado);
+  const { colocar, generado, ...datos } = estado;
+  if (datos.ejcob) {
+    const { id, resp, bOrig, corregido, ...cfg } = datos.ejcob;
+    if (bOrig) datos.b = { ...datos.b, ...bOrig };
+    datos.ejcob = cfg;
+  }
+  return enlaceDe(datos);
 }
 
 // Entradas numéricas del estado (para leer/escribir el formulario)
@@ -123,7 +157,8 @@ $('#modelo').innerHTML = MODELOS.map((m) => `<option value="${m.id}" ${m.disponi
 $('#itm-clima').innerHTML = Object.entries(CLIMAS).map(([v, t]) => `<option value="${v}">${v} · ${esc(t)}</option>`).join('');
 $('#itm-suelo').innerHTML = Object.entries(SUELOS).map(([v, s]) => `<option value="${v}">${esc(s.nombre)} · εr ${fe(s.epsilon, 0)}, σ ${fe(s.sigma, 3)} S/m</option>`).join('');
 $('#ejemplo').innerHTML = '<option value="">Elegir ejemplo…</option>' +
-  Object.entries(EJEMPLOS).map(([id, e]) => `<option value="${id}">${esc(e.titulo)}</option>`).join('');
+  Object.entries(EJEMPLOS).map(([id, e]) => `<option value="${id}">${esc(e.titulo)}</option>`).join('') +
+  '<option value="__aleatorio">Ejercicio aleatorio para clase…</option>';
 
 // ---------------------------------------------------------------------
 // Formulario ↔ estado
@@ -134,7 +169,7 @@ const CAMPOS = [
   ['a-lat', 'a.lat', 6], ['a-lon', 'a.lon', 6], ['b-lat', 'b.lat', 6], ['b-lon', 'b.lon', 6],
   ['a-h', 'a.h', 1], ['b-h', 'b.h', 1], ['a-g', 'a.g', 2], ['b-g', 'b.g', 2], ['a-l', 'a.l', 2], ['b-l', 'b.l', 2],
   ['f-valor', 'f.v', 4], ['f-unidad', 'f.u'], ['p-valor', 'p.v', 4], ['p-unidad', 'p.u'],
-  ['sens', 'sens', 2], ['k', 'k'], ['terreno', 'terreno'], ['modelo', 'modelo'],
+  ['sens', 'sens', 2], ['k', 'k'], ['terreno', 'terreno'], ['obs-d', 'obstaculo.d', 3], ['obs-z', 'obstaculo.z', 1], ['modelo', 'modelo'],
   ['itm-clima', 'itm.clima'], ['itm-n0', 'itm.n0', 0], ['itm-suelo', 'itm.suelo'], ['itm-pol', 'itm.pol'], ['itm-tiempo', 'itm.tiempo'],
 ];
 const leerRuta = (ruta) => ruta.split('.').reduce((o, k) => o[k], estado);
@@ -154,7 +189,13 @@ function escribirFormulario(excepto) {
   }
   sincronizarDeslizadores();
   mostrarOpcionesModelo();
+  mostrarObstaculo();
 }
+// Distancia y cota del obstáculo: solo con el relieve «plano con un obstáculo»
+function mostrarObstaculo() {
+  $$('.obst-campo').forEach((el) => { el.hidden = estado.terreno !== 'obstaculo'; });
+}
+const claveTerreno = () => (estado.terreno === 'obstaculo' ? `obstaculo:${estado.obstaculo.d}:${estado.obstaculo.z}` : estado.terreno === 'plano' ? 'plano' : 'ign');
 
 // Las opciones de Longley–Rice solo se ven con ese modelo elegido
 function mostrarOpcionesModelo() {
@@ -171,7 +212,7 @@ function errorCampo(el, msg) {
 const LIMITES = {
   'a.lat': [-85, 85], 'b.lat': [-85, 85], 'a.lon': [-180, 180], 'b.lon': [-180, 180],
   'a.h': [0, 500], 'b.h': [0, 500], 'a.g': [-10, 70], 'b.g': [-10, 70], 'a.l': [0, 100], 'b.l': [0, 100],
-  'p.v': [-100, 100000], sens: [-160, 0], 'itm.n0': [250, 400],
+  'p.v': [-100, 100000], sens: [-160, 0], 'itm.n0': [250, 400], 'obstaculo.d': [0.001, 2000], 'obstaculo.z': [0, 9000],
 };
 
 function alCambiarCampo(ev) {
@@ -193,7 +234,7 @@ function alCambiarCampo(ev) {
     ponerRuta(ruta, el.value);
     if (ruta.startsWith('itm.')) estado.itm = parametrosITM(estado.itm);
     if (el.id === 'modelo') mostrarOpcionesModelo();
-    if (el.id === 'terreno') { pedirPerfil(0); return; }
+    if (el.id === 'terreno') { mostrarObstaculo(); pedirPerfil(0); return; }
     if (el.id === 'f-unidad' || el.id === 'p-unidad') sincronizarDeslizadores();
     recalcular();
     return;
@@ -207,6 +248,7 @@ function alCambiarCampo(ev) {
   errorCampo(el, msg);
   if (msg) return;
   ponerRuta(ruta, v);
+  if (ruta.startsWith('obstaculo.')) { pedirPerfil(300); return; }
   if (/^[ab]\.(lat|lon)$/.test(ruta)) {
     const id = ruta[0].toUpperCase();
     moverSitio(id, { lat: estado[ruta[0]].lat, lon: estado[ruta[0]].lon }, true, el);
@@ -297,17 +339,20 @@ async function descargarPerfil() {
     grafico.mensaje('Los emplazamientos A y B están demasiado cerca. Separa los puntos en el mapa.');
     return;
   }
-  const real = estado.terreno !== 'plano';
+  const real = estado.terreno === 'ign';
+  const clave = claveTerreno();
   $('#app').classList.add('cargando');
   grafico.mensaje(real ? 'Descargando el relieve del IGN…' : 'Preparando el perfil teórico…');
   try {
     const p = await obtenerPerfil(a, b, {
-      modo: real ? 'ign' : 'plano',
+      modo: estado.terreno,
+      obstaculo: { ...estado.obstaculo },
       señal: ctl.signal,
       alProgreso: (x) => grafico.mensaje(`Descargando el relieve del IGN… ${Math.round(x * 100)} %`),
     });
     if (ctl.signal.aborted) return;
     perfil = p;
+    perfil.clave = clave;
     recalcular();
   } catch (e) {
     if (e.name === 'AbortError') return;
@@ -335,7 +380,7 @@ function recalcular() {
     Math.abs(perfil.puntos[0].lat - estado.a.lat) < 1e-6 && Math.abs(perfil.puntos[0].lon - estado.a.lon) < 1e-6 &&
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lat - estado.b.lat) < 1e-6 &&
     Math.abs(perfil.puntos[perfil.puntos.length - 1].lon - estado.b.lon) < 1e-6 &&
-    (perfil.fuente.id === 'plano') === (estado.terreno === 'plano');
+    perfil.clave === claveTerreno();
 
   const modelo = obtenerModelo(estado.modelo);
   const resModelo = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: vigente ? perfil.puntos : null, hA: e.hA, hB: e.hB, itm: estado.itm });
@@ -346,14 +391,18 @@ function recalcular() {
     pintarPresupuesto(e, resModelo, pres, null);
     pintarDifraccion(pres, null, null, resModelo);
     pintarResumen(resModelo, pres, null, null);
+    pintarAlturas(null);
     ultimoContexto = { ...base, an: null, dif: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
+    ej?.alRecalcular();
     return; // el perfil llegará al terminar la descarga en curso
   }
 
   analisis = R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k: e.k });
   // Con Longley–Rice el relieve ya está en la pérdida: no se suma la difracción P.526
   const dif = resModelo.incluyeTerreno ? null : R.difraccionObstaculoPrincipal(analisis, e.fMHz);
-  grafico.pintar(analisis, { ocultar: ocultando() });
+  const alt = R.alturasMinimas(analisis);
+  grafico.pintar(analisis, { ocultar: ocultando(), altura: dibujoAltura(analisis, alt) });
+  pintarAlturas(alt);
   pintarPresupuesto(e, resModelo, pres, analisis);
   pintarFresnel(analisis);
   pintarDifraccion(pres, analisis, dif, resModelo);
@@ -363,13 +412,63 @@ function recalcular() {
   $('#b-cota').textContent = `${f(analisis.zB, 1)} m`;
   mapa.ponerPuntoCritico(analisis.peor && !ocultando() ? { lat: analisis.peor.lat, lon: analisis.peor.lon } : null, analisis.estado);
 
-  const ctx = { ...base, an: analisis, dif };
+  const ctx = { ...base, an: analisis, dif, alt };
   const pasos = construirPasos(ctx, f);
   pintarPasos(pasos);
   ultimoCalculo = { perdida: resModelo.perdida, prx: pres.prx, margen: pres.margen, r1Medio: analisis.r1Medio };
   ultimoContexto = { ...ctx, perfil, pasos };
   pintarComprobacion();
+  ej?.alRecalcular();
 }
+
+// ---------------------------------------------------------------------
+// Altura mínima de las antenas para despejar el 60 % de r1 (versión 1.4)
+// ---------------------------------------------------------------------
+const arriba01 = (h) => (h <= 0 ? 0 : Math.ceil(h * 10 - 1e-9) / 10);   // redondeo hacia arriba al decímetro
+function dibujoAltura(an, alt) {
+  if (!alt?.b || !$('#altmin').open || ocultando()) { $('#ley-altmin').hidden = true; return null; }
+  $('#ley-altmin').hidden = false;
+  const v = estado.altmin, x = alt[v];
+  if (v === 'a') return { yA: an.zA + Math.max(0, x.h), yB: an.yB, punto: x.punto, q: x.q };
+  if (v === 'b') return { yA: an.yA, yB: an.zB + Math.max(0, x.h), punto: x.punto, q: x.q };
+  return { yA: an.zA + Math.max(0, x.h), yB: an.zB + Math.max(0, x.h), punto: x.punto, q: x.q };
+}
+function pintarAlturas(alt) {
+  const txt = (h) => (h <= 0 ? 'cualquier altura' : `${f(arriba01(h), 1)} m`);
+  const donde = (p) => `${f(p.d / 1000, 2)} km de A (cota ${f(p.z, 0)} m)`;
+  $('#altmin-var').value = estado.altmin;
+  if (!alt?.b) {
+    $('#altmin-filas').innerHTML = '<tr><td colspan="3">Esperando el perfil del terreno.</td></tr>';
+    $('#altmin-nota').textContent = '';
+    $('#altmin-aplicar').disabled = true;
+    return;
+  }
+  const filas = [
+    [`B (con A a ${f(estado.a.h, 1)} m)`, alt.b], [`A (con B a ${f(estado.b.h, 1)} m)`, alt.a], ['A y B, la misma', alt.igual],
+  ];
+  $('#altmin-filas').innerHTML = filas.map(([t, x]) => `<tr><td>${esc(t)}</td><td class="num"><b>${txt(x.h)}</b></td><td>${x.h <= 0 ? '— (ya despeja)' : donde(x.punto)}</td></tr>`).join('');
+  const notas = [];
+  if (alt.sinCota) notas.push(`⚠ ${alt.sinCota} puntos sin cota no se han tenido en cuenta.`);
+  if (estado.modelo === 'longley-rice') notas.push('El criterio es geométrico (despeje de Fresnel con el factor k): no depende del modelo de propagación elegido.');
+  const elegida = alt[estado.altmin];
+  if (elegida.h > 500) notas.push('La altura elegida supera los 500 m: no se puede aplicar.');
+  $('#altmin-nota').textContent = notas.join(' ');
+  $('#altmin-aplicar').disabled = elegida.h > 500;
+}
+$('#altmin').addEventListener('toggle', () => recalcular());
+$('#altmin-var').addEventListener('change', (e) => { estado.altmin = e.target.value; recalcular(); });
+$('#altmin-aplicar').addEventListener('click', () => {
+  const alt = ultimoContexto?.alt;
+  if (!alt?.b) return;
+  const v = estado.altmin, h = arriba01(alt[v].h);
+  if (h > 500) return;
+  if (v === 'a' || v === 'igual') estado.a.h = h;
+  if (v === 'b' || v === 'igual') estado.b.h = h;
+  escribirFormulario();
+  recalcular();
+  contar('alturas-aplicadas', 'Altura mínima de antena aplicada');
+  toast(v === 'igual' ? `Antenas A y B a ${f(h, 1)} m: despejan el 60 % de r₁.` : `Antena ${v.toUpperCase()} a ${f(h, 1)} m: despeja el 60 % de r₁.`);
+});
 
 function pintarPresupuesto(e, res, pres, an) {
   const ok = pres.margen >= 0;
@@ -549,6 +648,7 @@ function pintarFuentesBiblio() {
 pintarFuentesBiblio();
 
 function pintarComprobacion() {
+  if (estado.generado) { $('#comprobacion').hidden = true; return; }   // lo pinta ejercicios-ui.js
   const ej = EJEMPLOS[estado.ejemplo];
   const caja = $('#comprobacion');
   $('#enunciado').hidden = !ej;
@@ -626,14 +726,22 @@ function aplicarModoEjercicio() {
     ? '<span class="txt-largo">Salir del modo ejercicio</span><span class="txt-corto">Salir</span>'
     : '<span class="txt-largo">Modo ejercicio</span><span class="txt-corto">Ejercicio</span>';
   $('#btn-compartir').textContent = estado.ejercicio ? 'Compartir ejercicio' : 'Compartir enlace';
+  // Ejercicios creados sin permitir ver la solución: no se puede revelar
+  const sinSolucion = !!estado.ejercicio && ((estado.generado && !estado.generado.s) || (estado.ejcob && !estado.ejcob.s));
+  $('#btn-comprobar').hidden = sinSolucion;
   $('#barra-ejercicio').hidden = !estado.ejercicio;
   $('#btn-comprobar').textContent = revelado ? 'Ocultar resultados' : 'Comprobar resultados';
   $('#texto-ejercicio').textContent = revelado
     ? 'Resultados visibles: compara con tus cálculos y despliega «Ver cálculo» para ver la sustitución.'
     : 'Modo ejercicio: calcula a mano con los datos y las fórmulas, y después comprueba.';
   cob?.alCambiarEjercicio();
+  ej?.alCambiarEjercicio();
 }
 function ponerModoEjercicio(activo) {
+  if (!activo && (estado.generado || estado.ejcob)) { ej.salir(); return; }
+  modoEjercicio(activo);
+}
+function modoEjercicio(activo) {
   estado.ejercicio = activo;
   revelado = false;
   aplicarModoEjercicio();
@@ -655,6 +763,7 @@ $('#btn-comprobar').addEventListener('click', () => {
 // Ejemplos, compartir, instalación
 // ---------------------------------------------------------------------
 function cargarEjemplo(id) {
+  if (id === '__aleatorio') { ej.abrirCrear(); return; }
   const { ejercicio, plano, modelo, itm, cobertura } = estado;
   estado = copiaEjemplo(id);
   estado.ejercicio = !!ejercicio;
@@ -671,7 +780,7 @@ function cargarEjemplo(id) {
 $('#ejemplo').addEventListener('change', (e) => { if (e.target.value) cargarEjemplo(e.target.value); e.target.value = ''; });
 
 async function compartir() {
-  const url = enlaceCompartir();
+  const url = await enlaceCompartir();
   try {
     if (navigator.share) { await navigator.share({ title: estado.ejercicio ? 'Ejercicio de radioenlace' : 'Radioenlace punto a punto', url }); return; }
   } catch (e) { if (e.name === 'AbortError') return; }
@@ -679,6 +788,8 @@ async function compartir() {
   catch { $('#enlace-manual').hidden = false; $('#enlace-manual input').value = url; $('#enlace-manual input').select(); }
 }
 $('#btn-compartir').addEventListener('click', compartir);
+$('#btn-qr').addEventListener('click', async () => ej.abrirQR(await enlaceCompartir(), estado.ejercicio ? 'Este ejercicio' : 'Este enlace'));
+$('#btn-ej-aleatorio').addEventListener('click', () => ej.abrirCrear());
 
 let avisoToast = 0;
 function toast(texto) {
@@ -792,9 +903,10 @@ function aplicarEstado() {
   pintarDistancia();
   pedirPerfil(0);
   recalcular();
+  ej?.aplicarEstado();
 }
 
-estado = estadoInicial();
+estado = await estadoInicial();
 
 // ---------------------------------------------------------------------
 // Mapas de cobertura (versión 1.3)
@@ -823,13 +935,55 @@ cob = iniciarCobertura({
     recalcular();
     toast('Modelo cambiado a Longley–Rice (también para el enlace A–B).');
   },
+  // Versión 1.4: ejercicios con el mapa de cobertura
+  mapaVisibleEnEjercicio: () => !!estado.ejercicio && estado.ejcob?.modo === 'lectura',
+  marcando: (geo) => !!ej?.alTocarMapa(geo),
+  alCambiarResultado: () => ej?.alCambiarCobertura(),
+});
+
+// ---------------------------------------------------------------------
+// Ejercicios aleatorios, ejercicios de cobertura y código QR (versión 1.4)
+// ---------------------------------------------------------------------
+ej = iniciarEjercicios({
+  mapa, f, esc, toast, contar, guardar, irA, urlApp, enlaceDe,
+  estado: () => estado,
+  cob: () => cob,
+  revelado: () => revelado,
+  revelar(si) { revelado = si; aplicarModoEjercicio(); recalcular(); },
+  modoEjercicio,
+  aplicarModoEjercicio,
+  ponerColocar,
+  cargarEjemplo(id) { estado.ejercicio = false; cargarEjemplo(id); },
+  // Carga un estado nuevo (ejercicio) conservando las preferencias de planos, ITM y cobertura
+  cargarEstado(parcial) {
+    const { plano, itm, cobertura } = estado;
+    estado = validar({ ...copiaEjemplo('teorico'), ejemplo: null, plano, itm, cobertura, ...parcial });
+    revelado = false;
+    perfil = null;
+    aplicarEstado();
+  },
+  // «Estudiar» un punto del ejercicio de cobertura: B en el punto con la antena del mapa
+  ponerB(geo, rx) {
+    const b = estado.b;
+    b.h = rx.h; b.g = rx.g; b.l = rx.l;
+    moverSitio('B', geo, true);
+    sincronizarDeslizadores();
+  },
+  restaurarB(o) {
+    const b = estado.b;
+    b.h = o.h; b.g = o.g; b.l = o.l;
+    moverSitio('B', { lat: o.lat, lon: o.lon }, true);
+    sincronizarDeslizadores();
+  },
 });
 
 if (location.search) history.replaceState(null, '', location.pathname + location.hash);
 mostrarVista(location.hash.slice(1));
 aplicarEstado();
+if (avisoInicial) toast(avisoInicial);
+if (configPendiente) ej.pedirId({ tipo: 'aleatorio', cfg: configPendiente });
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* sin modo sin conexión */ });
 }
-window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa, get cobertura() { return cob; } };
+window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa, get cobertura() { return cob; }, get ejercicios() { return ej; }, get revelado() { return revelado; }, enlaceCompartir };
