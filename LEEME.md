@@ -4,7 +4,8 @@
 para planificar y estudiar radioenlaces punto a punto: mapa táctil, perfil del terreno con
 datos del IGN/CNIG, línea de visión, 1.ª zona de Fresnel con el límite del 60 %, curvatura
 terrestre con factor k, presupuesto de enlace en espacio libre o con el modelo
-**Longley–Rice (ITM)**, con cada cálculo explicado (fórmula, sustitución y unidades).
+**Longley–Rice (ITM)**, con cada cálculo explicado (fórmula, sustitución y unidades), y
+**mapas de cobertura** alrededor del transmisor.
 Hasta la versión 1.1 se llamaba *Radioenlace PxP*.
 
 No necesita cuentas, claves ni servidor propio: son archivos estáticos.
@@ -21,7 +22,11 @@ No necesita cuentas, claves ni servidor propio: son archivos estáticos.
 | `js/radio.js` | **Todos los cálculos** (dBm, pérdidas, Fresnel, curvatura, análisis del perfil) |
 | `js/itm.js` | Modelo **Longley–Rice (ITM)**, traducido de la implementación de referencia del NTIA |
 | `js/modelos.js` | Modelos de propagación: espacio libre y Longley–Rice, con sus explicaciones |
-| `js/terreno.js` | Descarga de cotas del MDT del IGN y respaldo Copernicus |
+| `js/terreno.js` | Cotas del MDT del IGN por zonas fijas, respaldo Copernicus y relieve guardado sin conexión |
+| `js/cobertura.js` | Cálculo de los mapas de cobertura (el mismo que el del enlace A–B, píxel a píxel) |
+| `js/cobertura-worker.js` | Cálculo de la cobertura en segundo plano (Web Worker) |
+| `js/cobertura-ui.js` | Panel, capa del mapa, leyenda, ficha del píxel y descargas de la cobertura |
+| `js/cobertura-exportar.js` | Exportación de la cobertura a KMZ (Google Earth) y CSV |
 | `js/mapa.js` | Mapa táctil (capas IGN, ortofoto PNOA, MTN y OpenStreetMap) |
 | `js/perfil.js` | Gráfico del perfil |
 | `js/explicacion.js` | Textos de los cálculos paso a paso |
@@ -54,7 +59,7 @@ Solo hay que hacerlo una vez. Tus alumnos **no** necesitan cuenta.
 
 **Para actualizarla más adelante:** sube de nuevo los archivos modificados con
 *Add file → Upload files*. Si cambias algo, abre `sw.js` y sube el número de
-`VERSION` (por ejemplo `radioenlace-v1.2.1`) para que los móviles descarguen la versión nueva.
+`VERSION` (por ejemplo `radioenlace-v1.3.2`) para que los móviles descarguen la versión nueva.
 
 **Al registrar una versión en Safe Creative:** abre `js/version.js`, cambia el número de la
 línea `REGISTRO` por el código nuevo y súbelo. El pie de la app, el informe CSV y los planos
@@ -127,7 +132,11 @@ Si no quieres instalar nada, publícala directamente (apartado 2) y pruébala al
    Los deslizadores cambian las alturas y la frecuencia al momento.
 4. **Cálculos:** presupuesto, despeje de Fresnel y difracción (o Longley–Rice), y cada
    fórmula con la sustitución numérica y sus unidades.
-5. **Descargas:** enlace para compartir, planos PDF/DXF/KML y tablas CSV para Excel.
+5. **Mapa de cobertura** (bajo el mapa, en *Enlace*): elige el radio y la antena receptora
+   y pulsa *Calcular cobertura*. Con *Mover: Ninguno*, toca el mapa para ver los datos de un
+   píxel y pulsa *Poner B aquí* para comprobarlo con el enlace A–B.
+6. **Descargas:** enlace para compartir, planos PDF/DXF/KML, tablas CSV para Excel y la
+   cobertura en KMZ, PNG y CSV.
 
 Ejemplos incluidos (menú *Elegir ejemplo…*):
 - **Talavera de la Reina → Cerro Cruces** (Sierra de San Vicente): 5,8 GHz, 0,5 W,
@@ -142,9 +151,15 @@ Ejemplos incluidos (menú *Elegir ejemplo…*):
 - Fuente principal: **MDT25 del IGN/CNIG** (malla de 25 m), servido por el WCS INSPIRE
   de la IDEE (`servicios.idee.es/wcs-inspire/mdt`). Para trayectos de más de 80 km se usa
   el **MDT200**.
+- Desde la versión 1.3 el relieve se pide por **zonas fijas** de 200 × 200 celdas (0,05° en
+  el MDT25, unos 5,5 × 4,3 km), siempre con la misma petición. Así la cota de un punto es la
+  misma en el enlace A–B y en el mapa de cobertura.
 - Si el IGN no devuelve alguna cota (fuera de España, mar o fallo del servicio), se
-  completa con **Copernicus GLO-90** (≈ 90 m) mediante la API pública de Open-Meteo, y la
-  app lo indica. Si tampoco hay dato, avisa y marca en rojo los puntos sin cota.
+  completa con **Copernicus GLO-90** (malla de 3″, ≈ 90 m) mediante la API pública de
+  Open-Meteo, y la app lo indica. Si tampoco hay dato, avisa y marca en rojo los puntos sin cota.
+- El relieve descargado se guarda en el dispositivo y **no se borra al actualizar la app**:
+  el enlace A–B y los mapas de cobertura de las zonas ya descargadas funcionan sin
+  conexión. En *Mapa de cobertura → Relieve guardado* se ven las zonas y se pueden borrar.
 - El MDT es **suelo desnudo**: no incluye edificios ni arbolado.
 - La app muestra en todo momento la fuente, la resolución y el número de cotas.
 - La cobertura del MDT25 en EPSG:4258 es la Península y Baleares; en Canarias las cotas
@@ -181,33 +196,59 @@ La variabilidad se calcula en modo *accidental*, sin variabilidad de ubicaciones
   sus casos oficiales y en decenas de miles de casos aleatorios, con diferencias menores de
   10⁻⁹ dB (ver `pruebas/prueba-calculos.mjs`).
 
-**Versión 1.3 (mapas de cobertura):** `js/terreno.js` exporta `obtenerPerfil()` y
-`descargarMallaIGN()` para pedir el relieve de un área; el cálculo por píxel puede
-reutilizar `calcularITM()` de `js/modelos.js`, y `js/mapa.js` usa coordenadas Web
-Mercator, así que se puede superponer una imagen de cobertura.
+---
+
+## 9. Mapas de cobertura
+
+En la pestaña **Enlace**, debajo del mapa, despliega **Mapa de cobertura**:
+
+| Opción | Valores | Notas |
+|---|---|---|
+| Radio | 5, **10**, 20 o 30 km | Con más de 20 km la app pide confirmación y dice cuánto hay que descargar |
+| Resolución | **Normal** (200 × 200 píxeles) o fina (400 × 400) | Píxel de 50, 100, 200 o 300 m en normal; la fina, mejor en un ordenador |
+| Antena receptora | **La de B** o propia | Altura, ganancia y pérdidas; se supone orientada hacia A |
+
+- **Cómo se calcula:** para cada píxel se traza un perfil propio desde A hasta su centro,
+  con las mismas cotas, el mismo número de puntos, el mismo modelo (el elegido en *Datos*) y
+  el mismo presupuesto que el enlace A–B. Por eso **cada píxel da exactamente lo mismo que el
+  enlace A–B con B en su centro**: compruébalo tocando el píxel y pulsando *Poner B aquí*.
+- **Colores:** margen sobre la sensibilidad en bandas de 10 dB (0–10, 10–20, 20–30 y
+  ≥ 30 dB); la leyenda indica también el nivel recibido en dBm. Gris: por debajo de la
+  sensibilidad. Sin color: sin cálculo (faltan cotas, el modelo no se puede aplicar o a
+  menos de 50 m de A).
+- Se calcula en segundo plano, con barra de progreso y botón **Cancelar**. Si cambian los
+  datos, el mapa se marca como *desactualizado* hasta volver a calcularlo.
+- **Modo ejercicio:** el mapa se puede calcular, pero no se ve hasta pulsar *Comprobar resultados*.
+- **Descargas:** KMZ para Google Earth (un KML no puede llevar la imagen dentro), imagen PNG
+  con leyenda y datos, y CSV con una fila por píxel.
 
 ---
 
-## 9. Estadísticas de uso (GoatCounter)
+## 10. Estadísticas de uso (GoatCounter)
 
 La app cuenta, de forma anónima y sin cookies, las visitas, las instalaciones, las
-aperturas de la app ya instalada y las descargas por tipo (eventos `instalacion`,
-`apertura-instalada`, `descarga-pdf`, `descarga-dxf-perfil`, `descarga-dxf-planta`,
-`descarga-kml`, `descarga-csv-informe` y `descarga-csv-perfil`). No hay ningún contador
+aperturas de la app ya instalada, los mapas de cobertura calculados y las descargas por tipo
+(eventos `instalacion`, `apertura-instalada`, `cobertura-calculada`, `descarga-pdf`,
+`descarga-dxf-perfil`, `descarga-dxf-planta`, `descarga-kml`, `descarga-csv-informe`,
+`descarga-csv-perfil`, `descarga-cobertura-kmz`, `descarga-cobertura-png` y
+`descarga-cobertura-csv`). No hay ningún contador
 visible: los datos se consultan en el panel <https://radioenlace.goatcounter.com>.
 Las pruebas en `localhost` no se cuentan.
 
 ---
 
-## 10. Comprobar los cálculos (opcional, para quien tenga Node.js)
+## 11. Comprobar los cálculos (opcional, para quien tenga Node.js)
 
 ```
 node pruebas/prueba-calculos.mjs
 node pruebas/prueba-planos.mjs
+node pruebas/prueba-cobertura.mjs
 ```
 
 Comprueban el ejercicio de 5 GHz, la curvatura, la detección de obstáculos, la lectura
-de datos del IGN, Longley–Rice frente a los casos oficiales del NTIA y los planos.
+de datos del IGN, Longley–Rice frente a los casos oficiales del NTIA, los planos y que
+cada píxel de la cobertura coincide exactamente con el cálculo punto a punto (con una red
+simulada, sin conexión).
 
 ---
 

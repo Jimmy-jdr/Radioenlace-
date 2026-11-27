@@ -1,21 +1,25 @@
 /* Radioenlace PtP — © 2026 Jaime Díaz Rodríguez (Jimmy-jdr). Licencia CC BY-NC-ND 4.0: https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es */
 // =====================================================================
 // sw.js — Service worker: permite abrir la app sin conexión y guarda
-// en caché las teselas del mapa y el relieve ya consultados.
+// en caché las teselas del mapa ya consultadas.
+// El relieve (IGN y Copernicus) lo guarda la propia app en la caché
+// «radioenlace-relieve», que no depende de la versión y no se borra al
+// actualizar (zonas guardadas para usar sin conexión).
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.2.0';
+const VERSION = 'radioenlace-v1.3.1';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',
   './js/perfil.js', './js/explicacion.js', './js/ejemplos.js', './js/informe.js', './js/fuentes.js',
   './js/utm.js', './js/planos.js', './js/veredicto.js', './js/itm.js', './js/version.js',
+  './js/cobertura.js', './js/cobertura-worker.js', './js/cobertura-ui.js', './js/cobertura-exportar.js',
   './iconos/icono-192.png', './iconos/icono-512.png', './iconos/apple-touch-icon.png', './iconos/favicon-32.png',
+  './iconos/icono-maskable-512.png',
 ];
 const TESELAS = `${VERSION}-teselas`;
-const RELIEVE = `${VERSION}-relieve`;
+const RELIEVE_APP = 'radioenlace-relieve';   // la gestiona js/terreno.js: se conserva entre versiones
 const MAX_TESELAS = 600;
-const MAX_RELIEVE = 300;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(NUCLEO)).then(() => self.skipWaiting()));
@@ -23,7 +27,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()
-    .then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
+    .then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION) && k !== RELIEVE_APP).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -62,11 +66,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Relieve (IGN y Open-Meteo): primero la red, la caché si no hay conexión
-  if (/servicios\.idee\.es|api\.open-meteo\.com/.test(url.host)) {
-    e.respondWith(fetch(req).then((r) => {
-      if (r.ok) { const copia = r.clone(); caches.open(RELIEVE).then((c) => { c.put(req, copia); recortar(RELIEVE, MAX_RELIEVE); }); }
-      return r;
-    }).catch(() => caches.open(RELIEVE).then((c) => c.match(req)).then((r) => r || Response.error())));
-  }
+  // Relieve (IGN y Open-Meteo): pasa directamente; js/terreno.js lo guarda
+  // en su propia caché persistente y lo usa sin conexión.
 });

@@ -7,6 +7,8 @@ import { construirPasos } from '../js/explicacion.js';
 import { generarPDF, generarDXFPerfil, generarDXFPlanta, generarKML, nombrePlano } from '../js/planos.js';
 import { filasInforme, aCSV } from '../js/informe.js';
 import { evaluarEnlace } from '../js/veredicto.js';
+import { VERSION, REGISTRO } from '../js/version.js';   // versión y registro vigentes (antes fijos)
+const ANTIGUOS = ['2611257759054', '2611267771473', '2611277780168'].filter((c) => c !== REGISTRO);
 
 const salida = process.argv[2] || '/tmp/planos';
 mkdirSync(salida, { recursive: true });
@@ -60,15 +62,15 @@ for (const [id, c] of Object.entries(casos)) {
     cierto('Longley–Rice → pasos del ITM presentes', ['itm-datos', 'itm-refractividad', 'itm-deltah', 'itm-horizontes', 'itm-aref', 'itm-afs', 'itm-variabilidad', 'perdida'].every((k) => c.pasos.some((p) => p.id === k)));
   }
   const csv = aCSV(filasInforme({ ...c, fecha: new Date(2026, 10, 26) }));
-  cierto('CSV con evaluación global y nombre nuevo', csv.includes('Evaluación global') && csv.includes('Radioenlace PtP 1.2.0') && !csv.includes('PxP'));
-  cierto('CSV con un único código de Safe Creative (el último)', csv.includes('2611267771473') && !csv.includes('2611257759054'));
+  cierto('CSV con evaluación global y nombre nuevo', csv.includes('Evaluación global') && csv.includes(`Radioenlace PtP ${VERSION}`) && !csv.includes('PxP'));
+  cierto('CSV con un único código de Safe Creative (el último)', csv.includes(REGISTRO) && !ANTIGUOS.some((c) => csv.includes(c)));
   if (c.dif) cierto('CSV con difracción', csv.includes('Parámetro de difracción'));
   else cierto('CSV con los pasos de Longley–Rice', csv.includes('Irregularidad del terreno') && csv.includes('Atenuación de referencia') && !csv.includes('Parámetro de difracción'));
   writeFileSync(`${salida}/${id}_informe.csv`, csv);
   const pdfTxt = latin1(generarPDF(c, { formato: 'A4', exag: 10, fecha: new Date(2026, 10, 26) }));
   cierto('PDF: título con guion y sin «->»', pdfTxt.includes(`radioenlace ${c.a.nombre} \\226 ${c.b.nombre}`) && !/radioenlace [^)]*->/.test(pdfTxt));
   cierto('PDF: rótulos «mástil … · cota …» de A y B', ['A', 'B'].every((x) => new RegExp(`\\(${x} \\\\267 m\\\\341stil [\\d,]+ m \\\\267 cota [\\d,]+ m\\)`).test(pdfTxt)));
-  cierto('PDF: nombre nuevo y un único registro', pdfTxt.includes('Radioenlace PtP 1.2.0') && pdfTxt.includes('2611267771473') && !pdfTxt.includes('PxP') && !pdfTxt.includes('2611257759054'));
+  cierto('PDF: nombre nuevo y un único registro', pdfTxt.includes(`Radioenlace PtP ${VERSION}`) && pdfTxt.includes(REGISTRO) && !pdfTxt.includes('PxP') && !ANTIGUOS.some((c) => pdfTxt.includes(c)));
   for (const formato of ['A4', 'A3']) for (const exag of [1, 10]) {
     const pdf = generarPDF(c, { formato, exag, fecha: new Date(2026, 10, 26) });
     writeFileSync(`${salida}/${id}_${formato}_x${exag}.pdf`, pdf);
@@ -78,7 +80,7 @@ for (const [id, c] of Object.entries(casos)) {
   writeFileSync(`${salida}/${id}_planta.dxf`, dxfU);
   const kml = generarKML(c);
   writeFileSync(`${salida}/${id}.kml`, kml);
-  cierto('DXF y KML con el nombre nuevo y el registro', [dxfP, dxfU, kml].every((t) => t.includes('Radioenlace PtP 1.2.0') && t.includes('2611267771473') && !t.includes('PxP')));
+  cierto('DXF y KML con el nombre nuevo y el registro', [dxfP, dxfU, kml].every((t) => t.includes(`Radioenlace PtP ${VERSION}`) && t.includes(REGISTRO) && !t.includes('PxP')));
   cierto('DXF solo con ASCII', /^[\x0a\x20-\x7e]*$/.test(dxfP) && /^[\x0a\x20-\x7e]*$/.test(dxfU));
   cierto('DXF termina en EOF', dxfP.endsWith('EOF\n') && dxfU.endsWith('EOF\n'));
   // Pares código/valor: número de líneas par

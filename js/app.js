@@ -15,6 +15,8 @@ import { filasInforme, filasPerfil, aCSV, nombreArchivo, descargar } from './inf
 import { generarPDF, generarDXFPerfil, generarDXFPlanta, generarKML, nombrePlano } from './planos.js';
 import { evaluarEnlace } from './veredicto.js';
 import { FUENTES_BIBLIO } from './fuentes.js';
+import { iniciarCobertura } from './cobertura-ui.js';
+import { normalizarCobertura, COB_DEFECTO } from './cobertura.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -38,12 +40,13 @@ let ultimoCalculo = null;
 let ultimoContexto = null;  // lo que se exporta a CSV
 let revelado = false;       // modo ejercicio: resultados visibles tras «Comprobar»
 let avisoNinguno = false;   // aviso único al tocar el mapa con «Ninguno»
+let cob = null;             // mapas de cobertura (cobertura-ui.js)
 
 function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
   return JSON.parse(JSON.stringify({
     ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'ninguno',
-    plano: { formato: 'A4', exag: 10 }, itm: { ...ITM_DEFECTO },
+    plano: { formato: 'A4', exag: 10 }, itm: { ...ITM_DEFECTO }, cobertura: { ...COB_DEFECTO },
   }));
 }
 
@@ -68,6 +71,7 @@ function validar(s) {
   if (![1, 5, 10, 20].includes(+r.plano.exag)) r.plano.exag = 10;
   if (!MODELOS.some((m) => m.id === r.modelo && m.disponible)) r.modelo = 'espacio-libre';
   r.itm = parametrosITM(s.itm);
+  r.cobertura = normalizarCobertura(s.cobertura);
   return r;
 }
 
@@ -101,6 +105,7 @@ const mapa = new Mapa($('#mapa'), {
   alTocar: (geo, idMarcador) => {
     // Solo se mueve el punto elegido en «Mover»; la selección no cambia sola
     if (estado.colocar !== 'A' && estado.colocar !== 'B') {
+      if (cob?.alTocarMapa(geo)) return;   // consulta de un píxel del mapa de cobertura
       if (!avisoNinguno) { avisoNinguno = true; toast('Para mover un punto, elige A o B en «Mover» y toca el mapa.'); }
       return;
     }
@@ -321,6 +326,7 @@ function recalcular() {
   guardar();
   pintarDistancia();
   mostrarOpcionesModelo();
+  cob?.alRecalcular();
   const e = entradas();
   const dKm = R.distanciaKm(estado.a, estado.b);
 
@@ -625,6 +631,7 @@ function aplicarModoEjercicio() {
   $('#texto-ejercicio').textContent = revelado
     ? 'Resultados visibles: compara con tus cálculos y despliega «Ver cálculo» para ver la sustitución.'
     : 'Modo ejercicio: calcula a mano con los datos y las fórmulas, y después comprueba.';
+  cob?.alCambiarEjercicio();
 }
 function ponerModoEjercicio(activo) {
   estado.ejercicio = activo;
@@ -648,11 +655,12 @@ $('#btn-comprobar').addEventListener('click', () => {
 // Ejemplos, compartir, instalación
 // ---------------------------------------------------------------------
 function cargarEjemplo(id) {
-  const { ejercicio, plano, modelo, itm } = estado;
+  const { ejercicio, plano, modelo, itm, cobertura } = estado;
   estado = copiaEjemplo(id);
   estado.ejercicio = !!ejercicio;
   estado.plano = plano;
   estado.itm = itm;
+  estado.cobertura = cobertura;
   // Los ejercicios con comprobación automática se resuelven en espacio libre
   if (!EJEMPLOS[id].esperado) estado.modelo = modelo;
   revelado = false;
@@ -771,6 +779,7 @@ $('#pie-registro').textContent = REGISTRO;
 $('#pie-registro').href = URL_REGISTRO;
 
 function aplicarEstado() {
+  cob?.aplicarEstado();
   aplicarModoEjercicio();
   escribirFormulario();
   ponerColocar(estado.colocar || 'ninguno');
@@ -786,6 +795,36 @@ function aplicarEstado() {
 }
 
 estado = estadoInicial();
+
+// ---------------------------------------------------------------------
+// Mapas de cobertura (versión 1.3)
+// ---------------------------------------------------------------------
+cob = iniciarCobertura({
+  mapa, f, esc,
+  estado: () => estado,
+  entradas,
+  guardar,
+  toast,
+  contar,
+  ocultando,
+  // «Poner B aquí»: B en el centro del píxel y, si el mapa usa una antena
+  // receptora propia, también su altura, ganancia y pérdidas
+  ponerB(geo, rx) {
+    const b = estado.b;
+    const cambiaAntena = b.h !== rx.h || b.g !== rx.g || b.l !== rx.l;
+    if (cambiaAntena) { b.h = rx.h; b.g = rx.g; b.l = rx.l; }
+    moverSitio('B', geo, true);
+    sincronizarDeslizadores();
+    toast(`B colocado en el centro del píxel${cambiaAntena ? ' con la antena receptora del mapa' : ''}: el enlace A–B da el mismo resultado que el mapa.`);
+  },
+  usarITM() {
+    estado.modelo = 'longley-rice';
+    escribirFormulario();
+    recalcular();
+    toast('Modelo cambiado a Longley–Rice (también para el enlace A–B).');
+  },
+});
+
 if (location.search) history.replaceState(null, '', location.pathname + location.hash);
 mostrarVista(location.hash.slice(1));
 aplicarEstado();
@@ -793,4 +832,4 @@ aplicarEstado();
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* sin modo sin conexión */ });
 }
-window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa };
+window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa, get cobertura() { return cob; } };

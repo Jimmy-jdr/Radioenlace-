@@ -47,6 +47,18 @@ export const FUENTES_BIBLIO = [
     url: 'https://centrodedescargas.cnig.es/',
   },
   {
+    ref: 'Copernicus DEM GLO-90 (ESA / Airbus), servido por la API de elevación de Open-Meteo',
+    titulo: 'Modelo digital de superficie global con malla de 3″ (≈ 90 m)',
+    uso: 'Respaldo de las cotas que el IGN no tiene (mar, fuera de España): nodos de la malla de 3″ por bloques fijos e interpolación bilineal.',
+    url: 'https://open-meteo.com/en/docs/elevation-api',
+  },
+  {
+    ref: 'Mapas de cobertura (versión 1.3): perfiles radiales desde A',
+    titulo: 'Un perfil propio desde el transmisor hasta el centro de cada píxel, con el mismo cálculo punto a punto',
+    uso: 'Cada píxel da exactamente lo mismo que el enlace A–B con B en su centro (mismas teselas fijas del MDT, mismo número de cotas, mismo modelo y mismo presupuesto). Se ha contrastado una muestra de píxeles con la referencia C++ del NTIA.',
+    url: '',
+  },
+  {
     ref: 'Geodesia esférica: fórmula del semiverseno (haversine)',
     titulo: 'Distancia sobre una esfera de radio 6371 km',
     uso: 'Distancia entre emplazamientos; error frente al elipsoide GRS80 inferior al 0,4 % (< 0,03 dB en las pérdidas).',

@@ -5,6 +5,9 @@
 // Gestos: arrastrar para desplazar, pellizcar para ampliar, rueda del
 // ratón, botones + y −. Tocar el mapa mueve el emplazamiento elegido (A o B)
 // y solo ese marcador se puede arrastrar; con «Ninguno» no se mueve nada.
+// Versión 1.3: capa del mapa de cobertura (imagen en latitud/longitud que
+// se reproyecta a Web Mercator fila a fila), círculo del radio y píxel
+// seleccionado.
 // =====================================================================
 const T = 256;
 
@@ -52,7 +55,8 @@ export class Mapa {
     el.classList.add('mapa');
     el.innerHTML = `
       <div class="mapa-teselas"></div>
-      <svg class="mapa-capa-svg" aria-hidden="true"><line class="mapa-linea"/><circle class="mapa-critico" r="7"/></svg>
+      <canvas class="mapa-cobertura" aria-hidden="true"></canvas>
+      <svg class="mapa-capa-svg" aria-hidden="true"><path class="mapa-radio"/><path class="mapa-pixel"/><line class="mapa-linea"/><circle class="mapa-critico" r="7"/></svg>
       <div class="mapa-marcadores"></div>
       <div class="mapa-botones">
         <button type="button" class="mapa-btn" data-acc="mas" aria-label="Acercar">+</button>
@@ -64,6 +68,11 @@ export class Mapa {
       </label>
       <div class="mapa-atrib"></div>`;
     this.capaTeselas = el.querySelector('.mapa-teselas');
+    this.lienzo = el.querySelector('.mapa-cobertura');
+    this.svgRadio = el.querySelector('.mapa-radio');
+    this.svgPixel = el.querySelector('.mapa-pixel');
+    this.cobertura = null;   // { imagen, norte, oeste, este, dlat, N, opacidad, visible, circulo }
+    this.seleccion = null;   // { norte, sur, oeste, este } del píxel consultado
     this.svg = el.querySelector('svg');
     this.svgLinea = el.querySelector('.mapa-linea');
     this.svgCritico = el.querySelector('.mapa-critico');
@@ -176,6 +185,10 @@ export class Mapa {
     this.dibujar();
   }
 
+  // Capa de cobertura: imagen N × N en latitud/longitud (fila 0 al norte)
+  ponerCobertura(capa) { this.cobertura = capa; this.dibujar(); }
+  ponerSeleccion(caja) { this.seleccion = caja; this.dibujar(); }
+
   ponerLinea(a, b) { this.linea = a && b ? [a, b] : null; this.dibujar(); }
   ponerPuntoCritico(p, clase) {
     this.punto = p ? { ...p, clase } : null;
@@ -228,6 +241,7 @@ export class Mapa {
       m.el.style.transform = `translate(${p.x}px,${p.y}px)`;
     }
     this.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    this.#pintarCobertura(W, H);
     if (this.linea) {
       const a = this.aPantalla(this.linea[0]), b = this.aPantalla(this.linea[1]);
       Object.entries({ x1: a.x, y1: a.y, x2: b.x, y2: b.y }).forEach(([k, v]) => this.svgLinea.setAttribute(k, v));
@@ -239,6 +253,43 @@ export class Mapa {
       this.svgCritico.setAttribute('class', `mapa-critico ${this.punto.clase || ''}`);
       this.svgCritico.style.display = '';
     } else this.svgCritico.style.display = 'none';
+  }
+
+  #pintarCobertura(W, H) {
+    const cap = this.cobertura, cv = this.lienzo;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const ver = cap && cap.visible;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    cv.style.opacity = ver ? String(cap.opacidad) : '0';
+    if (ver) {
+      // Fila a fila con bordes enteros (sin huecos ni solapes). Si las filas
+      // miden menos de 2 px en pantalla se dibuja la imagen de una vez: la
+      // diferencia entre latitud lineal y Mercator es entonces menor de 1 px.
+      ctx.imageSmoothingEnabled = false;
+      const xo = Math.round(this.aPantalla({ lat: cap.norte, lon: cap.oeste }).x), xe = Math.round(this.aPantalla({ lat: cap.norte, lon: cap.este }).x);
+      const y = (lat) => this.aPantalla({ lat, lon: cap.oeste }).y;
+      const yN = y(cap.norte), yS = y(cap.norte - cap.N * cap.dlat);
+      if ((yS - yN) / cap.N < 2) ctx.drawImage(cap.imagen, 0, 0, cap.N, cap.N, xo, Math.round(yN), xe - xo, Math.round(yS) - Math.round(yN));
+      else {
+        let yArriba = Math.round(yN);
+        for (let r = 0; r < cap.N; r++) {
+          const yAbajo = Math.round(y(cap.norte - (r + 1) * cap.dlat));
+          if (yAbajo > yArriba && yAbajo >= 0 && yArriba <= H) ctx.drawImage(cap.imagen, 0, r, cap.N, 1, xo, yArriba, xe - xo, yAbajo - yArriba);
+          yArriba = yAbajo;
+        }
+      }
+    }
+    const camino = (pts) => pts.map((p, i) => { const q = this.aPantalla(p); return `${i ? 'L' : 'M'}${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join('') + 'Z';
+    if (ver && cap.circulo) { this.svgRadio.setAttribute('d', camino(cap.circulo)); this.svgRadio.style.display = ''; }
+    else this.svgRadio.style.display = 'none';
+    const s = this.seleccion;
+    if (s) {
+      this.svgPixel.setAttribute('d', camino([{ lat: s.norte, lon: s.oeste }, { lat: s.norte, lon: s.este }, { lat: s.sur, lon: s.este }, { lat: s.sur, lon: s.oeste }]));
+      this.svgPixel.style.display = '';
+    } else this.svgPixel.style.display = 'none';
   }
 
   // ---------- Gestos ----------

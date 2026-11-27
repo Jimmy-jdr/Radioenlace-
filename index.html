@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Radioenlace PtP</title>
-  <meta name="description" content="Radioenlace PtP (Point-to-Point): planificación y estudio de radioenlaces punto a punto con el perfil del terreno del IGN, zona de Fresnel, curvatura terrestre, presupuesto de enlace y modelo Longley–Rice, paso a paso.">
+  <meta name="description" content="Radioenlace PtP (Point-to-Point): planificación y estudio de radioenlaces punto a punto con el perfil del terreno del IGN, zona de Fresnel, curvatura terrestre, presupuesto de enlace, modelo Longley–Rice y mapas de cobertura, paso a paso.">
   <meta name="author" content="Jaime Díaz Rodríguez (Jimmy-jdr)">
   <meta name="copyright" content="© 2026 Jaime Díaz Rodríguez · CC BY-NC-ND 4.0">
   <link rel="license" href="https://creativecommons.org/licenses/by-nc-nd/4.0/">
@@ -20,7 +20,7 @@
   <meta name="apple-mobile-web-app-title" content="Radioenlace PtP">
   <meta name="format-detection" content="telephone=no">
   <link rel="stylesheet" href="css/app.css">
-  <!-- Estadísticas anónimas y sin cookies (GoatCounter): visitas, instalaciones, aperturas y descargas. Sin contador visible. -->
+  <!-- Estadísticas anónimas y sin cookies (GoatCounter): visitas, instalaciones, aperturas, mapas de cobertura y descargas. Sin contador visible. -->
   <!-- Solo se envía la ruta de la página: nunca los datos de los enlaces compartidos (?e=…) -->
   <script>window.goatcounter = { path: function () { return location.pathname; } };</script>
   <script data-goatcounter="https://radioenlace.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
@@ -74,7 +74,48 @@
         <b id="resumen-distancia" class="distancia">—</b>
         <span class="extremo"><i class="pastilla-b">B</i><span id="resumen-b"></span></span>
       </div>
-      <p class="pista" id="pista-mapa">Elige <b>A</b> o <b>B</b> y toca el mapa (o arrastra ese marcador) para moverlo. Con <b>Ninguno</b> puedes desplazar el mapa sin mover los puntos.</p>
+      <p class="pista" id="pista-mapa">Elige <b>A</b> o <b>B</b> y toca el mapa (o arrastra ese marcador) para moverlo. Con <b>Ninguno</b> puedes desplazar el mapa sin mover los puntos y, si hay un mapa de cobertura, tocarlo para ver los datos de cada píxel.</p>
+
+      <details id="cobertura" class="cobertura">
+        <summary><span class="cob-tit">Mapa de cobertura</span><span id="cob-chip" class="chip solo-revelado" hidden></span></summary>
+        <div class="cob-cuerpo">
+          <p class="nota">Colorea alrededor de A el margen con el que llegaría la señal a un receptor situado en cada punto. Cada píxel se calcula como el enlace A–B, con su propio perfil del terreno desde A hasta el centro del píxel y el modelo elegido en «Datos».</p>
+          <div class="rejilla-cob">
+            <div class="campo"><label for="cob-radio">Radio</label><select id="cob-radio"></select></div>
+            <div class="campo"><label for="cob-res">Resolución</label>
+              <select id="cob-res"><option value="normal">Normal · 200 × 200 píxeles</option><option value="fina">Fina · 400 × 400 (mejor en ordenador)</option></select></div>
+            <div class="campo"><label for="cob-rx">Antena receptora</label>
+              <select id="cob-rx"><option value="b">La de B (altura, ganancia y pérdidas)</option><option value="propio">Propia…</option></select></div>
+          </div>
+          <div id="cob-propio" class="rejilla-cob" hidden>
+            <div class="campo"><label for="cob-h">Altura (m)</label><input id="cob-h" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
+            <div class="campo"><label for="cob-g">Ganancia (dBi)</label><input id="cob-g" type="text" enterkeyhint="done"><small class="error"></small></div>
+            <div class="campo"><label for="cob-l">Pérdidas (dB)</label><input id="cob-l" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
+          </div>
+          <p id="cob-detalle" class="nota"></p>
+          <p id="cob-aviso-modelo" class="aviso-texto" hidden>En «Datos» está elegido el modelo de espacio libre: el mapa usará espacio libre más la difracción del obstáculo principal (UIT-R P.526). Para la cobertura se recomienda Longley–Rice. <button type="button" id="cob-usar-itm" class="boton secundario">Usar Longley–Rice</button></p>
+          <p id="cob-confirmar" class="aviso-texto" hidden><span id="cob-confirmar-texto"></span> Pulsa «Confirmar y calcular» para seguir.</p>
+          <div class="cob-botones">
+            <button type="button" id="cob-calcular" class="boton">Calcular cobertura</button>
+            <button type="button" id="cob-cancelar" class="boton secundario" hidden>Cancelar</button>
+          </div>
+          <div id="cob-progreso" class="cob-progreso" role="status" hidden><div class="barra-prog"><span></span></div><p id="cob-progreso-texto"></p></div>
+          <div id="cob-resultado" hidden>
+            <p id="cob-desactualizado" class="aviso-texto" hidden>Los datos han cambiado desde que se calculó este mapa: vuelve a calcularlo para actualizarlo.</p>
+            <p id="cob-resumen" class="nota"></p>
+            <p id="cob-avisos" class="aviso-texto" hidden></p>
+            <div class="cob-capa">
+              <label class="interruptor"><input type="checkbox" id="cob-visible"> Mostrar en el mapa</label>
+              <label class="opacidad">Opacidad <input type="range" id="cob-opacidad" min="10" max="100" step="5"></label>
+            </div>
+            <p class="nota solo-ejercicio">En modo ejercicio el mapa se muestra al pulsar «Comprobar resultados».</p>
+          </div>
+          <details id="cob-zonas-det" class="cob-zonas">
+            <summary>Relieve guardado para usar sin conexión</summary>
+            <div id="cob-zonas"></div>
+          </details>
+        </div>
+      </details>
     </section>
 
     <div class="col-enlace">
@@ -346,6 +387,22 @@
       </ul>
     </article>
 
+    <article class="tarjeta">
+      <div class="tarjeta-cab"><h2>Mapa de cobertura</h2></div>
+      <p class="nota">Primero calcula el mapa en la pestaña <a href="#enlace" class="enlace-vista">Enlace</a>, debajo del mapa.</p>
+      <p class="nota solo-ejercicio">En modo ejercicio las descargas se activan al pulsar «Comprobar resultados».</p>
+      <div class="botones-exportar solo-revelado">
+        <button type="button" id="btn-cob-kmz" class="boton">KMZ · Google Earth</button>
+        <button type="button" id="btn-cob-png" class="boton secundario">Imagen PNG</button>
+        <button type="button" id="btn-cob-csv" class="boton secundario">Tabla CSV</button>
+      </div>
+      <ul class="lista-nota">
+        <li><b>KMZ</b>: la cobertura superpuesta al terreno, con su leyenda, el emplazamiento A y el radio. Un KML no puede llevar la imagen dentro, por eso se descarga como KMZ (se abre igual en Google Earth).</li>
+        <li><b>PNG</b>: la cobertura sobre el mapa base, con leyenda, escala, datos del cálculo y autoría.</li>
+        <li><b>CSV</b>: una fila por píxel con coordenadas geográficas y UTM, distancia, cota, pérdida, nivel recibido, margen y modo de Longley–Rice.</li>
+      </ul>
+    </article>
+
     <article class="tarjeta exportar">
       <div class="tarjeta-cab"><h2>Tablas para Excel</h2></div>
       <div class="botones-exportar solo-revelado">
@@ -359,9 +416,9 @@
   </main>
 
   <footer class="pie">
-    <p class="autoria"><b id="pie-nombre">Radioenlace PtP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a id="pie-registro" href="https://www.safecreative.org/work/2611267771473" target="_blank" rel="noopener">2611267771473</a>.</p>
+    <p class="autoria"><b id="pie-nombre">Radioenlace PtP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a id="pie-registro" href="https://www.safecreative.org/work/2611277780168" target="_blank" rel="noopener">2611277780168</a>.</p>
     <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
-    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión <span id="pie-version">1.2.0</span> · espacio libre, Longley–Rice (ITM), Fresnel y difracción en filo de cuchillo. Próximamente: mapas de cobertura.</p>
+    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión <span id="pie-version">1.3.1</span> · espacio libre, Longley–Rice (ITM), Fresnel, difracción en filo de cuchillo y mapas de cobertura.</p>
     <p>Estadísticas de uso anónimas y sin cookies (GoatCounter).</p>
   </footer>
 </div>
