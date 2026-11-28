@@ -49,6 +49,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg><span>Cálculos</span></a>
     <a role="tab" href="#descargas" data-vista="descargas" id="t-descargas" aria-controls="v-descargas">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Descargas</span></a>
+    <a role="tab" href="#acerca" data-vista="acerca" id="t-acerca" aria-controls="v-acerca">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r=".6" fill="currentColor"/></svg><span>Acerca de</span></a>
   </nav>
 
   <main>
@@ -155,11 +157,22 @@
         <label><span>Frecuencia</span><input id="r-f" type="range" min="0" max="1000" step="1"><b id="v-f"></b></label>
       </div>
       <details id="altmin" class="altmin">
-        <summary>Altura mínima de las antenas (60 % de r₁)</summary>
+        <summary id="altmin-resumen">Altura mínima de las antenas (60 % de r₁)</summary>
         <div class="altmin-cuerpo">
           <p class="nota solo-ejercicio">En modo ejercicio se muestra al pulsar «Comprobar resultados».</p>
           <div class="solo-revelado">
-            <p class="nota">Altura de mástil con la que la línea de visión deja libre al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k de «Datos» (criterio de la UIT-R P.530, § 2.2.2). Se redondea hacia arriba al decímetro.</p>
+            <div class="altmin-p530 solo-revelado">
+              <div class="campo"><label for="altmin-criterio">Criterio de despeje</label>
+                <select id="altmin-criterio">
+                  <option value="60">60 % de r₁ con el factor k de «Datos»</option>
+                  <option value="p530">UIT-R P.530-19, § 2.2.2.1</option>
+                </select></div>
+              <div class="campo" data-p530><label for="altmin-obst">Obstáculo</label>
+                <select id="altmin-obst"><option value="aislado">Aislado (0,0·F1)</option><option value="extendido">Extendido a lo largo del trayecto (0,3·F1)</option></select></div>
+              <div class="campo" data-p530><label for="altmin-clima">Clima</label>
+                <select id="altmin-clima"><option value="templado">Templado</option><option value="tropical">Tropical (0,6·F1 si d &gt; 30 km)</option></select></div>
+            </div>
+            <p id="altmin-explica" class="nota">Altura de mástil con la que la línea de visión deja libre al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k de «Datos» (criterio de la UIT-R P.530, § 2.2.2). Se redondea hacia arriba al decímetro.</p>
             <table class="tabla-altmin">
               <thead><tr><th>Antena</th><th>Altura mínima</th><th>Punto que la limita</th></tr></thead>
               <tbody id="altmin-filas"></tbody>
@@ -224,6 +237,19 @@
           <div class="campo"><input id="a-l" type="text" inputmode="decimal" enterkeyhint="done"><small class="error"></small></div>
           <div class="campo"><input id="b-l" type="text" inputmode="decimal" enterkeyhint="done" aria-label="Pérdidas del lado B (dB)"><small class="error"></small></div>
         </div>
+
+        <details id="lineas" class="lineas solo-revelado">
+          <summary><span class="lin-tit">Pérdidas de cada lado: línea de transmisión y accesorios</span><small id="lin-resumen"></small></summary>
+          <div class="lin-cuerpo">
+            <p class="nota">Las pérdidas de cada lado se pueden escribir a mano (como hasta ahora) o <b>calcular</b> a partir de sus cables, guías de onda y accesorios, a la frecuencia del enlace, con los datos de las fichas de los fabricantes. Cada dato es un valor típico editable y tiene su fuente.</p>
+            <div class="lin-lados">
+              <section id="lin-a" class="lin-lado" data-lado="a"></section>
+              <section id="lin-b" class="lin-lado" data-lado="b"></section>
+            </div>
+            <p id="lin-orientacion" class="nota"></p>
+            <details class="lin-fuentes"><summary>Fuentes de los datos</summary><div id="lin-fuentes"></div></details>
+          </div>
+        </details>
 
         <div class="fila-distancia">
           <div class="campo">
@@ -380,6 +406,49 @@
         <p id="veredicto-global" class="veredicto solo-revelado"></p>
       </article>
     </div>
+    <details id="disp" class="tarjeta disp solo-revelado">
+      <summary><span class="disp-tit">Disponibilidad del enlace</span> <small>UIT-R P.530-19: multitrayecto, lluvia y nieve húmeda</small></summary>
+      <div class="disp-cuerpo">
+        <p class="nota">Porcentaje del año en que el enlace queda fuera de servicio porque el desvanecimiento supera el margen. Usa los mapas climáticos oficiales de la UIT para el punto medio del trayecto (incluidos para España, Baleares, Canarias, Ceuta y Melilla). Si tienes datos locales, escríbelos: tienen prioridad.</p>
+        <p id="disp-estado" class="nota" hidden></p>
+        <div class="disp-opciones">
+          <div class="campo"><label for="disp-pol">Polarización</label>
+            <select id="disp-pol"><option value="V">Vertical</option><option value="H">Horizontal</option></select></div>
+          <label class="casilla"><input type="checkbox" id="disp-nieve" checked> Lluvia y nieve húmeda (§ 2.4.2)</label>
+          <label class="casilla"><input type="checkbox" id="disp-gases"> Sumar la atenuación por gases (UIT-R P.676-13) al presupuesto</label>
+        </div>
+        <div id="disp-res" aria-live="polite"></div>
+        <details class="disp-datos">
+          <summary>Datos climáticos del punto medio</summary>
+          <table class="tabla-disp">
+            <thead><tr><th>Magnitud</th><th>Mapa UIT</th><th>Valor propio</th></tr></thead>
+            <tbody id="disp-clima"></tbody>
+          </table>
+          <button type="button" id="disp-restablecer" class="boton secundario">Usar todos los valores de los mapas</button>
+        </details>
+      </div>
+    </details>
+    <details id="cap" class="tarjeta disp cap solo-revelado">
+      <summary><span class="disp-tit">Capacidad según la modulación</span> <small>ETSI EN 302 217-2: Mbit/s, umbrales y modulación adaptativa</small></summary>
+      <div class="disp-cuerpo">
+        <p class="nota">Velocidad binaria de cada modulación en el canal elegido, R<sub>b</sub> = CS/(1 + α)·log<sub>2</sub>M·r, comparada con la capacidad mínima (RIC) que exige la norma europea. Marca las modulaciones que admite tu equipo: con una sola es un enlace de modulación fija; con varias, de modulación adaptativa, y la app calcula con la P.530 cuánto tiempo funciona cada una.</p>
+        <div class="disp-opciones cap-opciones">
+          <div class="campo"><label for="cap-cs">Separación de canal (MHz)</label><select id="cap-cs"></select></div>
+          <div class="campo"><label for="cap-alfa">Factor de caída α</label><input id="cap-alfa" type="text" inputmode="decimal" enterkeyhint="done"></div>
+          <div class="campo"><label for="cap-r">Tasa del código r</label><input id="cap-r" type="text" inputmode="decimal" enterkeyhint="done"></div>
+          <div class="campo"><label for="cap-objetivo">Objetivo de disponibilidad (%)</label><input id="cap-objetivo" type="text" inputmode="decimal" enterkeyhint="done"></div>
+        </div>
+        <p id="cap-banda" class="nota"></p>
+        <div id="cap-resumen" aria-live="polite"></div>
+        <div class="tabla-desliza">
+          <table class="tabla-disp tabla-cap">
+            <thead><tr><th scope="col">Usar</th><th scope="col">Modulación</th><th scope="col">R<sub>b</sub> (Mbit/s)</th><th scope="col">RIC mín.</th><th scope="col">Umbral (dBm)</th><th scope="col">Margen</th><th scope="col">Disponibilidad</th><th scope="col" aria-label="Aplicar como sensibilidad"></th></tr></thead>
+            <tbody id="cap-filas"></tbody>
+          </table>
+        </div>
+        <p class="nota">Umbrales por defecto: los de la norma para BER ≤ 10⁻⁶ en la banda y el canal del enlace (cuadros C.6, D.5, E.5 y F.5). Son límites que el equipo debe garantizar: las fichas de los fabricantes suelen ser varios dB mejores, así que escribe los de tu equipo si los tienes. «Usar» pone ese umbral como sensibilidad del presupuesto.</p>
+      </div>
+    </details>
     <section id="s-calculos" class="tarjeta">
       <div class="tarjeta-cab"><h2>Cálculos paso a paso</h2></div>
       <p class="nota">Cada fila muestra la fórmula y el resultado. Tócala para ver los datos, la fórmula completa y la sustitución numérica. El informe CSV incluye todo el detalle.</p>
@@ -460,13 +529,46 @@
     </article>
 
   </section>
+  <!-- ============ ACERCA DE (versión 1.4.3) ============ -->
+  <section id="v-acerca" class="vista vista-acerca" role="tabpanel" aria-labelledby="t-acerca" hidden>
+    <article class="tarjeta acerca">
+      <div class="acerca-cab">
+        <img src="iconos/icono-192.png" alt="" width="64" height="64">
+        <div><h2 id="pie-nombre">Radioenlace PtP</h2><p class="nota">Versión <span id="pie-version">1.5.0</span> · planificador didáctico de radioenlaces punto a punto</p></div>
+      </div>
+      <p>Radioenlace PtP sirve para diseñar y comprobar un radioenlace entre dos puntos: se colocan las antenas en el mapa, la app descarga el relieve real del terreno y calcula si la señal llega, con cuánto margen y durante qué parte del año. Funciona en el móvil y en el ordenador, se puede instalar y trabaja sin conexión.</p>
+      <h3>Para quién es</h3>
+      <ul>
+        <li><b>Alumnado de Formación Profesional</b> (ciclos de telecomunicaciones y de electricidad y electrónica) que aprende a calcular enlaces paso a paso.</li>
+        <li><b>Estudiantes universitarios</b> de ingeniería que quieren contrastar sus cálculos con las Recomendaciones de la UIT.</li>
+        <li><b>Docentes</b>, que pueden crear ejercicios con datos distintos para cada alumno y corregirlos con la propia app.</li>
+      </ul>
+      <h3>Qué calcula</h3>
+      <ul>
+        <li><b>Perfil del terreno</b> con el relieve del IGN, curvatura de la Tierra (factor k) y zona de Fresnel.</li>
+        <li><b>Pérdidas de propagación</b>: espacio libre (UIT-R P.525), difracción en filo de cuchillo (UIT-R P.526) y modelo Longley–Rice (ITM del NTIA).</li>
+        <li><b>Presupuesto del enlace</b>: PIRE, potencia recibida y margen, con las pérdidas de cables, guías de onda y accesorios de cada lado y, si se quiere, la atenuación por gases (UIT-R P.676).</li>
+        <li><b>Altura mínima de las antenas</b> con el criterio del 60 % de la zona de Fresnel o el completo de la UIT-R P.530.</li>
+        <li><b>Disponibilidad</b>: cortes por multitrayecto, lluvia y nieve húmeda según la UIT-R P.530, con los mapas climáticos de la UIT.</li>
+        <li><b>Capacidad</b> según la modulación (de QPSK a 4096QAM), con los umbrales de la norma ETSI EN 302 217-2 y modulación adaptativa.</li>
+        <li><b>Mapas de cobertura</b> alrededor de una antena.</li>
+        <li><b>Ejercicios aleatorios</b> en nueve niveles (del presupuesto a la disponibilidad y la capacidad), código QR para repartirlos e informes y planos para descargar (CSV, PDF, DXF y KML).</li>
+      </ul>
+      <p class="nota">Cada resultado se explica en <a href="#calculos" class="enlace-vista">Cálculos</a> con su fórmula, la sustitución numérica y la fuente. Es una herramienta didáctica: para un proyecto real hay que contrastar los resultados con los datos de los equipos y con las herramientas profesionales de planificación.</p>
+      <h3>Datos y fuentes</h3>
+      <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y © colaboradores de OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (ESA) vía Open-Meteo. Mapas climáticos: © UIT (Recomendaciones UIT-R P.530-19, P.836-6, P.837-8, P.839-4 y P.1510-1). Modelo Longley–Rice traducido de la implementación de referencia del NTIA/ITS. Fichas de cables y guías de onda de sus fabricantes. La lista completa está en <a href="#calculos" class="enlace-vista">Cálculos → Fuentes y criterios de cálculo</a>.</p>
+      <p>Herramienta inspirada en el flujo de trabajo de Radio Mobile; no comparte código con él.</p>
+      <h3>Privacidad</h3>
+      <p>Los enlaces que diseñas se guardan solo en este dispositivo. La app cuenta las visitas y el uso de sus funciones de forma anónima y sin cookies (GoatCounter); nunca envía los datos de los enlaces ni los nombres de los alumnos.</p>
+      <h3>Autor, licencia y contacto</h3>
+      <p class="autoria">© 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">Creative Commons Reconocimiento-NoComercial-SinObraDerivada 4.0 Internacional (CC BY-NC-ND 4.0)</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a id="pie-registro" href="https://www.safecreative.org/work/2611287789571" target="_blank" rel="noopener">2611287789571</a>.</p>
+      <p>Sugerencias, errores o dudas: <a id="acerca-correo" href="mailto:jimmy.jdr112@gmail.com?subject=Radioenlace%20PtP">jimmy.jdr112@gmail.com</a></p>
+    </article>
+  </section>
   </main>
 
   <footer class="pie">
-    <p class="autoria"><b id="pie-nombre">Radioenlace PtP</b> · © 2026 Jaime Díaz Rodríguez (<a href="https://github.com/Jimmy-jdr" target="_blank" rel="noopener">Jimmy-jdr</a>). Publicada bajo licencia <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a>: puedes compartirla citando al autor, sin fines comerciales y sin modificarla. Registrada en Safe Creative con el código <a id="pie-registro" href="https://www.safecreative.org/work/2611277780168" target="_blank" rel="noopener">2611277780168</a>.</p>
-    <p>Relieve: MDT25/MDT200 © Instituto Geográfico Nacional (IGN) · CNIG, servicio WCS de la IDEE. Mapas: IGN/CNIG y OpenStreetMap. Respaldo de cotas: Copernicus GLO-90 (Open-Meteo).</p>
-    <p>Herramienta didáctica inspirada en el flujo de trabajo de Radio Mobile. Versión <span id="pie-version">1.4.0</span> · espacio libre, Longley–Rice (ITM), Fresnel, difracción en filo de cuchillo, mapas de cobertura, altura mínima de antenas, ejercicios aleatorios y código QR.</p>
-    <p>Estadísticas de uso anónimas y sin cookies (GoatCounter).</p>
+    <p class="pie-mini"><span id="pie-mini-nombre">Radioenlace PtP</span> <span id="pie-mini-version">1.5.0</span> · © 2026 Jaime Díaz Rodríguez · <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/deed.es" target="_blank" rel="noopener license">CC BY-NC-ND 4.0</a> · <a href="#acerca" class="enlace-vista">Acerca de</a></p>
   </footer>
 </div>
 

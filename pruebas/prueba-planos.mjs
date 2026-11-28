@@ -8,7 +8,7 @@ import { generarPDF, generarDXFPerfil, generarDXFPlanta, generarKML, nombrePlano
 import { filasInforme, aCSV } from '../js/informe.js';
 import { evaluarEnlace } from '../js/veredicto.js';
 import { VERSION, REGISTRO } from '../js/version.js';   // versión y registro vigentes (antes fijos)
-const ANTIGUOS = ['2611257759054', '2611267771473', '2611277780168'].filter((c) => c !== REGISTRO);
+const ANTIGUOS = ['2611257759054', '2611267771473', '2611277780168', '2611287789571'].filter((c) => c !== REGISTRO);
 
 const salida = process.argv[2] || '/tmp/planos';
 mkdirSync(salida, { recursive: true });

@@ -169,7 +169,7 @@ export function iniciarEjercicios(h) {
           <td><label for="resp-${p.clave}">${esc(p.texto)}</label></td>
           <td><div class="con-ud"><input id="resp-${p.clave}" data-clave="${p.clave}" type="text" inputmode="decimal" autocomplete="off" value="${esc(g.resp?.[p.clave] ?? '')}">${p.unidad ? `<span>${p.unidad}</span>` : ''}</div></td>
           <td class="marca" data-marca="${p.clave}">${marca(corr?.[i])}</td>
-          ${ver ? `<td class="num">${f(sol[p.clave], p.dec)} ${p.unidad}<small> ± ${f(E.tolerancia(p, sol[p.clave]), p.dec)}</small></td>` : ''}
+          ${ver ? `<td class="num">${f(sol[p.clave], E.decimales(p, sol[p.clave]))} ${p.unidad}<small> ± ${f(E.tolerancia(p, sol[p.clave]), E.decimales(p, E.tolerancia(p, sol[p.clave])))}</small></td>` : ''}
         </tr>`).join('')}</tbody></table></div>
       ${corr ? `<p class="resumen-resp ${bien === preg.length ? 'ok-texto' : ''}"><b>${bien} de ${preg.length}</b> correctas${bien === preg.length ? '. ¡Muy bien!' : '.'}</p>` : ''}
       <div class="botones-exportar">

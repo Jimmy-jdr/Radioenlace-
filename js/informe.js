@@ -16,6 +16,9 @@ import { evaluarEnlace } from './veredicto.js';
 import { NOMBRE, VERSION, AUTOR, LICENCIA, REGISTRO } from './version.js';
 import { CLIMAS } from './itm.js';
 import { ITM_SITUACIONES, ITM_MDVAR } from './modelos.js';
+import { filasLinea } from './lineas.js';
+import { filasDisponibilidad } from './disponibilidad.js';
+import { filasCapacidad } from './capacidad.js';
 
 export { VERSION };
 const SEP = ';';
@@ -111,6 +114,13 @@ export function filasInforme(ctx) {
   filas.push(fila(D, 'Ganancia de la antena B (G_B)', '', '', num(e.grx, 2), 'dBi'));
   filas.push(fila(D, 'Pérdidas del lado A (L_A)', '', '', num(e.ltx, 2), 'dB'));
   filas.push(fila(D, 'Pérdidas del lado B (L_B)', '', '', num(e.lrx, 2), 'dB'));
+  // Versión 1.5: desglose de las pérdidas calculadas (línea y accesorios)
+  for (const [lado, letra] of [[ctx.a, 'A'], [ctx.b, 'B']]) {
+    for (const x of filasLinea(lado, letra, e.fMHz)) {
+      filas.push(fila('Línea y accesorios', x.magnitud, x.formula, x.sustitucion, x.valor == null ? '' : num(x.valor, 3), 'dB'));
+      if (x.fuente) filas.push(fila('Línea y accesorios', `   Fuente: ${x.fuente.texto}`, '', '', x.fuente.url || '', '', false));
+    }
+  }
   filas.push(fila(D, 'Sensibilidad del receptor (S_rx)', '', '', num(e.sens, 2), 'dBm'));
   filas.push(fila(D, 'Factor de radio terrestre equivalente (k)', '', '', num(e.k, 4), ''));
   filas.push(fila(D, 'Radio terrestre (R)', '', '', num(R_TIERRA_KM, 0), 'km'));
@@ -186,6 +196,15 @@ export function filasInforme(ctx) {
   const P = det ? 'Presupuesto con Longley–Rice' : 'Presupuesto en espacio libre';
   if (det) filas.push(fila(P, 'Pérdidas en espacio libre (referencia, UIT-R P.525)', '', '', num(perdidasEspacioLibre(dKm, e.fMHz), 2), 'dB'));
   filas.push(fila(P, `Pérdidas de propagación · ${modelo.nombre}`, F('perdida'), S('perdida'), num(resModelo.perdida, 2), 'dB'));
+  if (ctx.gases) {   // versión 1.5
+    const g = ctx.gases;
+    filas.push(fila(P, 'Temperatura del aire (T)', '', g.origen, num(g.T, 2), 'K'));
+    filas.push(fila(P, 'Densidad de vapor de agua (ρ)', '', g.origen, num(g.rho, 3), 'g/m³'));
+    filas.push(fila(P, 'Presión total (P.835-7)', 'P = 1013,25·(288,15/(288,15 − 6,5·h))^(−34,1632/6,5)', `h = ${numT(g.altKm, 3)} km`, num(g.P, 2), 'hPa'));
+    filas.push(fila(P, 'Atenuación específica del oxígeno (γo, P.676-13)', '', '', num(g.go, 5), 'dB/km'));
+    filas.push(fila(P, 'Atenuación específica del vapor de agua (γw, P.676-13)', '', '', num(g.gw, 5), 'dB/km'));
+    filas.push(fila(P, 'Atenuación por gases (Aa)', textoPlano(paso('gases').formula), textoPlano(paso('gases').sustitucion), num(g.A, 3), 'dB'));
+  }
   filas.push(fila(P, 'PIRE', F('pire'), S('pire'), num(pres.pire, 2), 'dBm'));
   filas.push(fila(P, 'Potencia recibida (P_rx)', F('prx'), S('prx'), num(pres.prx, 2), 'dBm'));
   filas.push(fila(P, 'Margen respecto a la sensibilidad (M)', F('margen'), S('margen'), num(pres.margen, 2), 'dB'));
@@ -250,6 +269,12 @@ export function filasInforme(ctx) {
   }
   const ev = evaluarEnlace(pres, an, dif, undefined, resModelo);
   filas.push(fila('Evaluación global', ev.titulo, '', '', ev.texto, '', false));
+
+  // 8 bis. Disponibilidad (UIT-R P.530-19, versión 1.5)
+  const sig = (x) => (x !== 0 && Math.abs(x) < 0.001 ? x.toExponential(4).replace('.', ',') : num(x, 4));
+  for (const [ap, mag, fo, su, v, u, esNum = true] of [...filasDisponibilidad(ctx.disp), ...filasCapacidad(ctx.cap)]) {
+    filas.push(fila(ap, mag, fo, su, typeof v === 'number' ? sig(v) : v, u, esNum && typeof v === 'number'));
+  }
 
   // 9. Fuentes
   for (const x of FUENTES_BIBLIO) filas.push(fila('Fuentes', `${x.ref}. ${x.titulo}`, x.uso, '', x.url, '', false));

@@ -20,6 +20,14 @@ import { normalizarCobertura, COB_DEFECTO } from './cobertura.js';
 import { iniciarEjercicios } from './ejercicios-ui.js';
 import { paramAConfig, normalizarGenerado, normalizarEjCob } from './ejercicios.js';
 import { codificarDatos, decodificarDatos } from './enlace.js';
+import { iniciarLineas } from './lineas-ui.js';
+import { normalizarLinea, perdidasLinea } from './lineas.js';
+import { iniciarDisponibilidad } from './disponibilidad-ui.js';
+import { normalizarDisponibilidad, datosClima, calcularDisponibilidad, atenuacionGases, puntoMedio, pasosDisponibilidad } from './disponibilidad.js';
+import { alturasMinimasP530 } from './p530.js';
+import { iniciarCapacidad } from './capacidad-ui.js';
+import { normalizarCapacidad, calcularCapacidad, pasosCapacidad } from './capacidad.js';
+import { atmosferaReferencia } from './p676.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -45,15 +53,20 @@ let revelado = false;       // modo ejercicio: resultados visibles tras «Compro
 let avisoNinguno = false;   // aviso único al tocar el mapa con «Ninguno»
 let cob = null;             // mapas de cobertura (cobertura-ui.js)
 let ej = null;              // ejercicios aleatorios, de cobertura y código QR (ejercicios-ui.js, versión 1.4)
+let lin = null;             // pérdidas de línea y accesorios (lineas-ui.js, versión 1.5)
+let disp = null;            // disponibilidad P.530 y gases P.676 (disponibilidad-ui.js, versión 1.5)
+let cap = null;             // capacidad según la modulación, ETSI EN 302 217-2 (capacidad-ui.js, versión 1.5)
 let configPendiente = null; // ?g=…: ejercicio aleatorio que espera el identificador del alumno
 let avisoInicial = '';
 
+const ALTCRIT_DEFECTO = { criterio: '60', obstaculo: 'aislado', clima: 'templado' };
 function copiaEjemplo(id) {
   const e = EJEMPLOS[id];
   return JSON.parse(JSON.stringify({
     ejemplo: id, terreno: e.terreno, a: e.a, b: e.b, f: e.f, p: e.p, sens: e.sens, k: e.k, modelo: 'espacio-libre', colocar: 'ninguno',
     plano: { formato: 'A4', exag: 10 }, itm: { ...ITM_DEFECTO }, cobertura: { ...COB_DEFECTO },
     obstaculo: { d: 5, z: 50 }, altmin: 'b',
+    disp: normalizarDisponibilidad(), gases: false, altcrit: { ...ALTCRIT_DEFECTO }, cap: normalizarCapacidad(),
   }));
 }
 
@@ -81,10 +94,23 @@ function validar(s) {
   const r = { ...base, ...s, a: { ...base.a, ...s.a }, b: { ...base.b, ...s.b }, f: { ...base.f, ...s.f }, p: { ...base.p, ...s.p }, plano: { ...base.plano, ...s.plano } };
   if (!['A', 'B', 'ninguno'].includes(r.colocar)) r.colocar = 'ninguno';
   if (!['ign', 'plano', 'obstaculo'].includes(r.terreno)) r.terreno = 'ign';
+  // Versión 1.5: línea y accesorios de cada lado (sin ella, las pérdidas guardadas siguen como valor manual)
+  r.a.linea = normalizarLinea(s.a?.linea);
+  r.b.linea = normalizarLinea(s.b?.linea);
   r.obstaculo = { ...base.obstaculo, ...s.obstaculo };
   if (!(Number.isFinite(+r.obstaculo.d) && Number.isFinite(+r.obstaculo.z))) r.obstaculo = { ...base.obstaculo };
   r.obstaculo = { d: +r.obstaculo.d, z: +r.obstaculo.z };
   if (!['a', 'b', 'igual'].includes(r.altmin)) r.altmin = 'b';
+  // Versión 1.5: disponibilidad (P.530), gases (P.676) y criterio de despeje de la altura mínima
+  r.disp = normalizarDisponibilidad(s.disp);
+  r.gases = s.gases === true;
+  r.cap = normalizarCapacidad(s.cap);
+  const ac = { ...ALTCRIT_DEFECTO, ...(s.altcrit || {}) };
+  r.altcrit = {
+    criterio: ac.criterio === 'p530' ? 'p530' : '60',
+    obstaculo: ac.obstaculo === 'extendido' ? 'extendido' : 'aislado',
+    clima: ac.clima === 'tropical' ? 'tropical' : 'templado',
+  };
   r.generado = normalizarGenerado(s.generado);
   r.ejcob = normalizarEjCob(s.ejcob);
   if (!r.generado) delete r.generado;
@@ -186,6 +212,8 @@ function escribirFormulario(excepto) {
       $('#k-otro').value = el.value === 'otro' ? String(v).replace('.', ',') : '';
       $('#k-otro-campo').hidden = el.value !== 'otro';
     } else el.value = dec != null ? fe(v, dec) : String(v);
+    // Ejercicios de los niveles 5 y 6: las pérdidas calculadas de la línea no se enseñan hasta revelar
+    if ((id === 'a-l' || id === 'b-l') && ocultando() && estado[id[0]].linea?.modo === 'calculada') el.value = '';
   }
   sincronizarDeslizadores();
   mostrarOpcionesModelo();
@@ -217,6 +245,7 @@ const LIMITES = {
 
 function alCambiarCampo(ev) {
   const el = ev.target;
+  if (el.readOnly) return;   // pérdidas calculadas a partir de la línea (versión 1.5)
   if (el.id === 'k-otro') {
     const k = R.leerK(el.value);
     errorCampo(el, isFinite(k) && k > 0 ? '' : 'Escribe un número mayor que 0 (p. ej. 1,33)');
@@ -367,7 +396,92 @@ async function descargarPerfil() {
 // ---------------------------------------------------------------------
 // Cálculo y pintado
 // ---------------------------------------------------------------------
+// Versión 1.5: pérdidas calculadas a partir de la línea y los accesorios de cada lado,
+// a la frecuencia actual. Si algún elemento no se puede calcular, se mantiene el último valor.
+function aplicarLineas() {
+  const fMHz = R.aMHz(estado.f.v, estado.f.u);
+  for (const s of ['a', 'b']) {
+    const ln = estado[s].linea;
+    if (ln?.modo !== 'calculada') continue;
+    const r = perdidasLinea(ln, fMHz);
+    if (r.valido) estado[s].l = r.total;
+  }
+}
+// Si se pone a mano una pérdida (antena receptora de un mapa), el lado pasa a «A mano»
+function perdidaManual(s, l) {
+  if (estado[s].l !== l && estado[s].linea?.modo === 'calculada') estado[s].linea.modo = 'manual';
+  estado[s].l = l;
+}
+
+// ---------------------------------------------------------------------
+// Gases (P.676-13) y disponibilidad (P.530-19), versión 1.5
+// ---------------------------------------------------------------------
+function altitudMediaKm(e, vigente) {
+  if (!vigente) return Math.max(0, (e.hA + e.hB) / 2000);
+  const p = perfil.puntos, zA = p.find((x) => x.z != null)?.z ?? 0, zB = [...p].reverse().find((x) => x.z != null)?.z ?? 0;
+  return Math.max(0, (zA + e.hA + zB + e.hB) / 2000);
+}
+function gasesActuales(e, dKm, vigente) {
+  if (!estado.gases) return null;
+  const datos = disp?.datos();
+  if (!datos) disp?.necesitaDatos();
+  const altKm = altitudMediaKm(e, vigente);
+  const clima = datosClima(datos, puntoMedio(estado.a, estado.b), altKm, estado.disp.propios);
+  // Fuera de los mapas y sin valores propios: atmósfera de referencia (P.835-7: T(h) y ρ = 7,5·e^(−h/2) g/m³)
+  const ref = atmosferaReferencia(altKm);
+  const T = clima.T.v ?? ref.T, rho = clima.rho.v ?? 7.5 * Math.exp(-altKm / 2);
+  const origen = clima.T.v != null && clima.rho.v != null ? (clima.T.propio || clima.rho.propio ? 'valores propios y mapas de la UIT' : 'mapas de la UIT (P.1510-1 y P.836-6)')
+    : datos || !estado.gases ? 'atmósfera de referencia (P.835-7)' : 'atmósfera de referencia (P.835-7) mientras se cargan los mapas';
+  return { ...atenuacionGases({ fGHz: e.fMHz / 1000, dKm, altKm, T, rho }), altKm, origen };
+}
+function alturasSegunCriterio(e, dKm) {
+  if (estado.altcrit.criterio !== 'p530') return R.alturasMinimas(analisis);
+  return alturasMinimasP530({
+    dKm, clima: estado.altcrit.clima, obstaculo: estado.altcrit.obstaculo,
+    analizar: (k) => R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k }),
+    minimas: R.alturasMinimas,
+  });
+}
+// Datos de entrada de la P.530 (sin calcular): los usan la disponibilidad y la capacidad
+function entradaDisponibilidad(ctx, vigente) {
+  const datos = disp.datos();
+  if (!datos && Object.keys(estado.disp.propios).length < 5) { disp.necesitaDatos(); return { pendiente: 'Cargando los mapas climáticos de la UIT…' }; }
+  const { e, dKm, modelo, resModelo, an, dif, gases } = ctx;
+  const Ag = gases?.A || 0;
+  // Margen con la pérdida mediana (50 % del tiempo) y la difracción del obstáculo principal
+  let L = resModelo.perdida, nota = '';
+  if (resModelo.incluyeTerreno && resModelo.parametros.tiempo !== 50) {
+    L = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: perfil.puntos, hA: e.hA, hB: e.hB, itm: { ...estado.itm, tiempo: 50 } }).perdida;
+    nota = ' (Longley–Rice recalculado al 50 % del tiempo)';
+  }
+  const p50 = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: L + Ag, sensibilidad: e.sens });
+  const J = !resModelo.incluyeTerreno && dif ? dif.J : 0;
+  const F = p50.margen - J;
+  const formulaF = `F = P<sub>tx</sub> + G<sub>A</sub> + G<sub>B</sub> − L<sub>A</sub> − L<sub>B</sub> − ${resModelo.simbolo || 'L<sub>el</sub>'}${Ag ? ' − A<sub>a</sub>' : ''}${J ? ' − J' : ''} − S<sub>rx</sub>`;
+  const sustitucionF = `F = ${f(e.ptxDbm, 2)} + ${f(e.gtx, 2)} + ${f(e.grx, 2)} − ${f(e.ltx, 2)} − ${f(e.lrx, 2)} − ${f(L, 2)}${nota}${Ag ? ` − ${f(Ag, 2)}` : ''}${J ? ` − ${f(J, 2)}` : ''} − (${f(e.sens, 2)})`;
+  const ptos = perfil.puntos.filter((p) => p.z != null);
+  const ht = ptos.reduce((s, p) => s + p.z, 0) / ptos.length;
+  const clima = datosClima(datos, puntoMedio(estado.a, estado.b), altitudMediaKm(e, vigente), estado.disp.propios);
+  return { dKm, fGHz: e.fMHz / 1000, pol: estado.itm.pol, yA: an.yA, yB: an.yB, ht, F, clima, nieve: estado.disp.nieve, formulaF, sustitucionF };
+}
+function disponibilidadActual(ctx, vigente) {
+  if (!disp?.abierta()) return null;
+  const ent = entradaDisponibilidad(ctx, vigente);
+  return ent.pendiente ? ent : calcularDisponibilidad(ent);
+}
+// Capacidad (versión 1.5): tabla de modulaciones con la disponibilidad de cada una
+function capacidadActual(ctx, vigente) {
+  if (!cap?.abierta()) return null;
+  const e = ctx.e, base = { fGHz: e.fMHz / 1000, cap: estado.cap, sens: e.sens };
+  if (!vigente || !ctx.an) return calcularCapacidad(base);
+  const ent = entradaDisponibilidad(ctx, vigente);
+  if (ent.pendiente) return { ...calcularCapacidad(base), pendiente: ent.pendiente };
+  return calcularCapacidad({ ...base, F: ent.F, dispCon: (F) => calcularDisponibilidad({ ...ent, F }) });
+}
+
 function recalcular() {
+  aplicarLineas();
+  lin?.alRecalcular();
   guardar();
   pintarDistancia();
   mostrarOpcionesModelo();
@@ -384,15 +498,21 @@ function recalcular() {
 
   const modelo = obtenerModelo(estado.modelo);
   const resModelo = modelo.calcular({ dKm, fMHz: e.fMHz, perfil: vigente ? perfil.puntos : null, hA: e.hA, hB: e.hB, itm: estado.itm });
-  const pres = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: resModelo.perdida, sensibilidad: e.sens });
-  const base = { e, a: { ...estado.a }, b: { ...estado.b }, dKm, modelo, resModelo, pres };
+  // Versión 1.5: atenuación por gases (P.676) sumada al presupuesto si se pide
+  const gases = gasesActuales(e, dKm, vigente);
+  const Ag = gases?.A || 0;
+  const pres = R.presupuesto({ ptxDbm: e.ptxDbm, gtx: e.gtx, grx: e.grx, ltx: e.ltx, lrx: e.lrx, perdidaTrayecto: resModelo.perdida + Ag, sensibilidad: e.sens });
+  const base = { e, a: { ...estado.a }, b: { ...estado.b }, dKm, modelo, resModelo, pres, gases };
   pintarITM(modelo, resModelo);
   if (!vigente) {
     pintarPresupuesto(e, resModelo, pres, null);
     pintarDifraccion(pres, null, null, resModelo);
     pintarResumen(resModelo, pres, null, null);
     pintarAlturas(null);
-    ultimoContexto = { ...base, an: null, dif: null, perfil: null, pasos: construirPasos({ ...base, an: null }, f) };
+    disp?.pintar(disp.abierta() ? { pendiente: 'Esperando el perfil del terreno.' } : null);
+    const capR = capacidadActual(base, false);
+    cap?.pintar(capR);
+    ultimoContexto = { ...base, an: null, dif: null, perfil: null, cap: capR, pasos: construirPasos({ ...base, an: null }, f).concat(pasosCapacidad(capR, f)) };
     ej?.alRecalcular();
     return; // el perfil llegará al terminar la descarga en curso
   }
@@ -400,7 +520,7 @@ function recalcular() {
   analisis = R.analizarPerfil({ perfil: perfil.puntos, hA: e.hA, hB: e.hB, fMHz: e.fMHz, k: e.k });
   // Con Longley–Rice el relieve ya está en la pérdida: no se suma la difracción P.526
   const dif = resModelo.incluyeTerreno ? null : R.difraccionObstaculoPrincipal(analisis, e.fMHz);
-  const alt = R.alturasMinimas(analisis);
+  const alt = alturasSegunCriterio(e, dKm);
   grafico.pintar(analisis, { ocultar: ocultando(), altura: dibujoAltura(analisis, alt) });
   pintarAlturas(alt);
   pintarPresupuesto(e, resModelo, pres, analisis);
@@ -413,7 +533,11 @@ function recalcular() {
   mapa.ponerPuntoCritico(analisis.peor && !ocultando() ? { lat: analisis.peor.lat, lon: analisis.peor.lon } : null, analisis.estado);
 
   const ctx = { ...base, an: analisis, dif, alt };
-  const pasos = construirPasos(ctx, f);
+  ctx.disp = disponibilidadActual(ctx, vigente);
+  disp?.pintar(ctx.disp);
+  ctx.cap = capacidadActual(ctx, vigente);
+  cap?.pintar(ctx.cap);
+  const pasos = construirPasos(ctx, f).concat(pasosDisponibilidad(ctx.disp, f), pasosCapacidad(ctx.cap, f));
   pintarPasos(pasos);
   ultimoCalculo = { perdida: resModelo.perdida, prx: pres.prx, margen: pres.margen, r1Medio: analisis.r1Medio };
   ultimoContexto = { ...ctx, perfil, pasos };
@@ -428,6 +552,7 @@ const arriba01 = (h) => (h <= 0 ? 0 : Math.ceil(h * 10 - 1e-9) / 10);   // redon
 function dibujoAltura(an, alt) {
   if (!alt?.b || !$('#altmin').open || ocultando()) { $('#ley-altmin').hidden = true; return null; }
   $('#ley-altmin').hidden = false;
+  $('#ley-altmin').lastChild.textContent = estado.altcrit.criterio === 'p530' ? 'Altura mínima (P.530)' : 'Altura mínima (60 %)';
   const v = estado.altmin, x = alt[v];
   if (v === 'a') return { yA: an.zA + Math.max(0, x.h), yB: an.yB, punto: x.punto, q: x.q };
   if (v === 'b') return { yA: an.yA, yB: an.zB + Math.max(0, x.h), punto: x.punto, q: x.q };
@@ -437,6 +562,15 @@ function pintarAlturas(alt) {
   const txt = (h) => (h <= 0 ? 'cualquier altura' : `${f(arriba01(h), 1)} m`);
   const donde = (p) => `${f(p.d / 1000, 2)} km de A (cota ${f(p.z, 0)} m)`;
   $('#altmin-var').value = estado.altmin;
+  const ac = estado.altcrit, p530 = ac.criterio === 'p530';
+  $('#altmin-criterio').value = ac.criterio;
+  $('#altmin-obst').value = ac.obstaculo;
+  $('#altmin-clima').value = ac.clima;
+  for (const el of document.querySelectorAll('#altmin [data-p530]')) el.hidden = !p530;
+  $('#altmin-resumen').textContent = p530 ? 'Altura mínima de las antenas (UIT-R P.530)' : 'Altura mínima de las antenas (60 % de r₁)';
+  $('#altmin-explica').innerHTML = p530
+    ? `Criterio completo de la UIT-R P.530-19 (§ 2.2.2.1): la mayor de las alturas que dan 1,0·r₁ de despeje con k = 4/3 (paso 1) y ${ac.clima === 'tropical' && alt?.criterio?.paso3.fraccion === 0.6 ? '0,6' : ac.obstaculo === 'extendido' ? '0,3' : '0,0'}·r₁ con el k<sub>e</sub> superado el 99,9 % del peor mes (pasos 2 y 3)${alt?.ke ? `, aquí k<sub>e</sub> = 157/(144 + 2 670/d) = ${f(alt.ke, 3)}` : ''}. Se redondea hacia arriba al decímetro.`
+    : 'Altura de mástil con la que la línea de visión deja libre al menos el 60 % del radio de la 1.ª zona de Fresnel en todo el trayecto, con el factor k de «Datos» (criterio de la UIT-R P.530, § 2.2.2). Se redondea hacia arriba al decímetro.';
   if (!alt?.b) {
     $('#altmin-filas').innerHTML = '<tr><td colspan="3">Esperando el perfil del terreno.</td></tr>';
     $('#altmin-nota').textContent = '';
@@ -450,6 +584,13 @@ function pintarAlturas(alt) {
   const notas = [];
   if (alt.sinCota) notas.push(`⚠ ${alt.sinCota} puntos sin cota no se han tenido en cuenta.`);
   if (estado.modelo === 'longley-rice') notas.push('El criterio es geométrico (despeje de Fresnel con el factor k): no depende del modelo de propagación elegido.');
+  if (p530) {
+    const paso = (x) => (x.h <= 0 ? '' : x.paso === 1 ? 'paso 1' : 'paso 3');
+    notas.push(`Paso que limita: B, ${paso(alt.b) || '—'}; A, ${paso(alt.a) || '—'}; misma altura, ${paso(alt.igual) || '—'}.`);
+    const fGHz = R.aMHz(estado.f.v, estado.f.u) / 1000;
+    if (fGHz > 13) notas.push('Por encima de unos 13 GHz hay que sumar a esta altura la incertidumbre de la cota del obstáculo (P.530, § 2.2.2.1).');
+    if (fGHz < 2) notas.push('Por debajo de unos 2 GHz la P.530 admite fracciones menores de r₁ para no exigir mástiles excesivos.');
+  }
   const elegida = alt[estado.altmin];
   if (elegida.h > 500) notas.push('La altura elegida supera los 500 m: no se puede aplicar.');
   $('#altmin-nota').textContent = notas.join(' ');
@@ -457,6 +598,9 @@ function pintarAlturas(alt) {
 }
 $('#altmin').addEventListener('toggle', () => recalcular());
 $('#altmin-var').addEventListener('change', (e) => { estado.altmin = e.target.value; recalcular(); });
+$('#altmin-criterio').addEventListener('change', (e) => { estado.altcrit.criterio = e.target.value; recalcular(); });
+$('#altmin-obst').addEventListener('change', (e) => { estado.altcrit.obstaculo = e.target.value; recalcular(); });
+$('#altmin-clima').addEventListener('change', (e) => { estado.altcrit.clima = e.target.value; recalcular(); });
 $('#altmin-aplicar').addEventListener('click', () => {
   const alt = ultimoContexto?.alt;
   if (!alt?.b) return;
@@ -466,8 +610,11 @@ $('#altmin-aplicar').addEventListener('click', () => {
   if (v === 'b' || v === 'igual') estado.b.h = h;
   escribirFormulario();
   recalcular();
-  contar('alturas-aplicadas', 'Altura mínima de antena aplicada');
-  toast(v === 'igual' ? `Antenas A y B a ${f(h, 1)} m: despejan el 60 % de r₁.` : `Antena ${v.toUpperCase()} a ${f(h, 1)} m: despeja el 60 % de r₁.`);
+  const p530 = estado.altcrit.criterio === 'p530';
+  if (p530) contar('altura-p530-aplicada', 'Altura mínima con el criterio de la P.530 aplicada');
+  else contar('alturas-aplicadas', 'Altura mínima de antena aplicada');
+  const cumple = p530 ? 'cumplen el criterio de despeje de la P.530' : 'despejan el 60 % de r₁';
+  toast(v === 'igual' ? `Antenas A y B a ${f(h, 1)} m: ${cumple}.` : `Antena ${v.toUpperCase()} a ${f(h, 1)} m: ${p530 ? 'cumple el criterio de despeje de la P.530' : 'despeja el 60 % de r₁'}.`);
 });
 
 function pintarPresupuesto(e, res, pres, an) {
@@ -752,9 +899,20 @@ $('#btn-ejercicio').addEventListener('click', () => {
   toast(estado.ejercicio ? 'Modo ejercicio activado: los resultados están ocultos.' : 'Modo ejercicio desactivado.');
 });
 $('#btn-salir-ejercicio').addEventListener('click', () => ponerModoEjercicio(false));
+// Versión 1.5: al revelar un ejercicio de los niveles 5 a 9 se despliega la tarjeta que lo resuelve
+function abrirTarjetasNivel() {
+  const n = estado.generado?.n;
+  if (!revelado || !(n >= 5)) return;
+  const abrir = (sel) => { const d = $(sel); if (d && !d.open) d.open = true; };
+  if (n <= 6) abrir('#lineas');
+  if (n === 7) abrir('#altmin');
+  if (n >= 8) abrir('#disp');
+  if (n === 9) abrir('#cap');
+}
 $('#btn-comprobar').addEventListener('click', () => {
   revelado = !revelado;
   aplicarModoEjercicio();
+  abrirTarjetasNivel();
   recalcular();
   if (revelado && vistaActual === 'datos') irA('calculos');
 });
@@ -849,9 +1007,9 @@ function contar(evento, titulo) {
 if (instalada) contar('apertura-instalada', 'Apertura de la app instalada');
 
 // ---------------------------------------------------------------------
-// Pestañas: Enlace · Datos · Cálculos · Descargas (dirección #enlace…)
+// Pestañas: Enlace · Datos · Cálculos · Descargas · Acerca de (dirección #enlace…; «Acerca de» desde la 1.4.3)
 // ---------------------------------------------------------------------
-const VISTAS = ['enlace', 'datos', 'calculos', 'descargas'];
+const VISTAS = ['enlace', 'datos', 'calculos', 'descargas', 'acerca'];
 let vistaActual = 'enlace';
 function mostrarVista(id) {
   if (!VISTAS.includes(id)) id = 'enlace';
@@ -862,6 +1020,8 @@ function mostrarVista(id) {
     t.setAttribute('aria-selected', String(v === id));
     t.tabIndex = v === id ? 0 : -1;
   }
+  // En «Acerca de» ya están la licencia y el registro completos: no se repite la línea del pie
+  $('.pie').hidden = id === 'acerca';
   window.scrollTo({ top: 0 });
 }
 function irA(id) {
@@ -886,11 +1046,15 @@ window.addEventListener('popstate', () => mostrarVista(location.hash.slice(1)));
 // Pie: nombre, versión y código de registro salen de version.js
 $('#pie-nombre').textContent = NOMBRE;
 $('#pie-version').textContent = VERSION;
+$('#pie-mini-nombre').textContent = NOMBRE;
+$('#pie-mini-version').textContent = VERSION;
+$('#acerca-correo').addEventListener('click', () => contar('contacto-correo', 'Correo de contacto'));
 $('#pie-registro').textContent = REGISTRO;
 $('#pie-registro').href = URL_REGISTRO;
 
 function aplicarEstado() {
   cob?.aplicarEstado();
+  lin?.pintar();
   aplicarModoEjercicio();
   escribirFormulario();
   ponerColocar(estado.colocar || 'ninguno');
@@ -924,7 +1088,7 @@ cob = iniciarCobertura({
   ponerB(geo, rx) {
     const b = estado.b;
     const cambiaAntena = b.h !== rx.h || b.g !== rx.g || b.l !== rx.l;
-    if (cambiaAntena) { b.h = rx.h; b.g = rx.g; b.l = rx.l; }
+    if (cambiaAntena) { b.h = rx.h; b.g = rx.g; perdidaManual('b', rx.l); lin?.pintar(); }
     moverSitio('B', geo, true);
     sincronizarDeslizadores();
     toast(`B colocado en el centro del píxel${cambiaAntena ? ' con la antena receptora del mapa' : ''}: el enlace A–B da el mismo resultado que el mapa.`);
@@ -942,6 +1106,36 @@ cob = iniciarCobertura({
 });
 
 // ---------------------------------------------------------------------
+// Pérdidas de línea y accesorios de cada lado (versión 1.5)
+// ---------------------------------------------------------------------
+lin = iniciarLineas({
+  f, fe, esc, contar, ocultar: () => ocultando(),
+  estado: () => estado,
+  fMHz: () => R.aMHz(estado.f.v, estado.f.u),
+  leerNumero: R.leerNumero,
+  recalcular,
+});
+
+// ---------------------------------------------------------------------
+// Disponibilidad (UIT-R P.530-19) y atenuación por gases (versión 1.5)
+// ---------------------------------------------------------------------
+disp = iniciarDisponibilidad({
+  f, esc, contar, recalcular, escribirFormulario,
+  estado: () => estado,
+  leerNumero: R.leerNumero,
+});
+
+// ---------------------------------------------------------------------
+// Capacidad según la modulación (versión 1.5)
+// ---------------------------------------------------------------------
+cap = iniciarCapacidad({
+  f, esc, contar, recalcular, escribirFormulario, toast,
+  estado: () => estado,
+  leerNumero: R.leerNumero,
+  necesitaDatos: () => disp?.necesitaDatos(),
+});
+
+// ---------------------------------------------------------------------
 // Ejercicios aleatorios, ejercicios de cobertura y código QR (versión 1.4)
 // ---------------------------------------------------------------------
 ej = iniciarEjercicios({
@@ -949,7 +1143,7 @@ ej = iniciarEjercicios({
   estado: () => estado,
   cob: () => cob,
   revelado: () => revelado,
-  revelar(si) { revelado = si; aplicarModoEjercicio(); recalcular(); },
+  revelar(si) { revelado = si; aplicarModoEjercicio(); abrirTarjetasNivel(); recalcular(); },
   modoEjercicio,
   aplicarModoEjercicio,
   ponerColocar,
@@ -957,7 +1151,9 @@ ej = iniciarEjercicios({
   // Carga un estado nuevo (ejercicio) conservando las preferencias de planos, ITM y cobertura
   cargarEstado(parcial) {
     const { plano, itm, cobertura } = estado;
-    estado = validar({ ...copiaEjemplo('teorico'), ejemplo: null, plano, itm, cobertura, ...parcial });
+    // Versión 1.5: un ejercicio puede fijar parte de las opciones de Longley–Rice (la polarización)
+    const p = parcial.itm ? { ...parcial, itm: { ...itm, ...parcial.itm } } : parcial;
+    estado = validar({ ...copiaEjemplo('teorico'), ejemplo: null, plano, itm, cobertura, ...p });
     revelado = false;
     perfil = null;
     aplicarEstado();
@@ -965,13 +1161,13 @@ ej = iniciarEjercicios({
   // «Estudiar» un punto del ejercicio de cobertura: B en el punto con la antena del mapa
   ponerB(geo, rx) {
     const b = estado.b;
-    b.h = rx.h; b.g = rx.g; b.l = rx.l;
+    b.h = rx.h; b.g = rx.g; perdidaManual('b', rx.l); lin?.pintar();
     moverSitio('B', geo, true);
     sincronizarDeslizadores();
   },
   restaurarB(o) {
     const b = estado.b;
-    b.h = o.h; b.g = o.g; b.l = o.l;
+    b.h = o.h; b.g = o.g; perdidaManual('b', o.l); lin?.pintar();
     moverSitio('B', { lat: o.lat, lon: o.lon }, true);
     sincronizarDeslizadores();
   },
@@ -986,4 +1182,4 @@ if (configPendiente) ej.pedirId({ tipo: 'aleatorio', cfg: configPendiente });
 if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* sin modo sin conexión */ });
 }
-window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa, get cobertura() { return cob; }, get ejercicios() { return ej; }, get revelado() { return revelado; }, enlaceCompartir };
+window.__app = { get estado() { return estado; }, get analisis() { return analisis; }, get perfil() { return perfil; }, get calculo() { return ultimoCalculo; }, get contexto() { return ultimoContexto; }, mapa, get cobertura() { return cob; }, get ejercicios() { return ej; }, get revelado() { return revelado; }, enlaceCompartir, recalcular };

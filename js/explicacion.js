@@ -3,6 +3,7 @@
 // explicacion.js — Cálculos paso a paso (fórmula, sustitución, unidades)
 // =====================================================================
 import { C, R_TIERRA_KM, longitudOnda } from './radio.js';
+import { pasoLinea } from './lineas.js';
 
 // Notación científica legible: 5,8·10⁹
 function cientifica(x, f) {
@@ -66,6 +67,29 @@ export function construirPasos(ctx, f) {
   for (const p of [].concat(pm || [])) pasos.push({ grupo: 'Presupuesto del enlace', id: 'perdida', ...p });
   const Lp = resModelo.simbolo || 'L<sub>el</sub>';
 
+  // Versión 1.5: pérdidas calculadas a partir de la línea y los accesorios
+  for (const [lado, letra] of [[a, 'A'], [b, 'B']]) {
+    const p = pasoLinea(lado, letra, e.fMHz, f);
+    if (p) pasos.push({ grupo: 'Presupuesto del enlace', ...p });
+  }
+
+  // Versión 1.5: atenuación por gases atmosféricos (UIT-R P.530-19 § 2.1 y P.676-13)
+  const g = ctx.gases;
+  if (g) {
+    pasos.push({
+      grupo: 'Presupuesto del enlace',
+      id: 'gases',
+      titulo: 'Atenuación por gases atmosféricos (A<sub>a</sub>)',
+      corta: 'A<sub>a</sub> = (γ<sub>o</sub> + γ<sub>w</sub>)·d',
+      datos: `Altitud media de las antenas: ${f(g.altKm * 1000, 0)} m. Presión total ${f(g.P, 1)} hPa (P.835-7), T = ${f(g.T, 2)} K, ρ = ${f(g.rho, 2)} g/m³ (${g.origen}); e = ρ·T/216,7 = ${f(g.e, 2)} hPa; p = ${f(g.pSeco, 1)} hPa de aire seco`,
+      formula: 'γ = 0,182·f·(N″<sub>oxígeno</sub>(f) + N″<sub>vapor</sub>(f))  (P.676-13, ec. 1);  A<sub>a</sub> = γ·d  (P.530-19, ec. 1)',
+      sustitucion: `γ<sub>o</sub> = ${f(g.go, 5)} dB/km; γ<sub>w</sub> = ${f(g.gw, 5)} dB/km; d = ${f(dKm, 3)} km`,
+      resultado: `A<sub>a</sub> = ${f(g.A, 3)} dB`,
+      nota: 'Suma raya a raya de las 44 líneas del oxígeno y las 35 del vapor de agua (anexo 1 de la P.676-13). La P.530 recomienda incluirla por encima de unos 10 GHz; por debajo suele ser de décimas de dB.',
+    });
+  }
+  const sumaGases = g ? ' − A<sub>a</sub>' : '';
+
   pasos.push({
     grupo: 'Presupuesto del enlace',
     id: 'pire',
@@ -80,9 +104,9 @@ export function construirPasos(ctx, f) {
     grupo: 'Presupuesto del enlace',
     id: 'prx',
     titulo: 'Potencia recibida (P<sub>rx</sub>)',
-    corta: `P<sub>rx</sub> = PIRE − ${Lp} + G<sub>B</sub> − L<sub>B</sub>`,
-    formula: `P<sub>rx</sub> = PIRE − ${Lp} + G<sub>B</sub> − L<sub>B</sub>`,
-    sustitucion: `P<sub>rx</sub> = ${f(pres.pire, 2)} dBm − ${f(resModelo.perdida, 2)} dB + ${f(e.grx, 2)} dBi − ${f(e.lrx, 2)} dB`,
+    corta: `P<sub>rx</sub> = PIRE − ${Lp}${sumaGases} + G<sub>B</sub> − L<sub>B</sub>`,
+    formula: `P<sub>rx</sub> = PIRE − ${Lp}${sumaGases} + G<sub>B</sub> − L<sub>B</sub>`,
+    sustitucion: `P<sub>rx</sub> = ${f(pres.pire, 2)} dBm − ${f(resModelo.perdida, 2)} dB${g ? ` − ${f(g.A, 3)} dB` : ''} + ${f(e.grx, 2)} dBi − ${f(e.lrx, 2)} dB`,
     resultado: `P<sub>rx</sub> = ${f(pres.prx, 2)} dBm`,
     nota: `Es el balance completo: P<sub>rx</sub> = P<sub>tx</sub> + G<sub>A</sub> + G<sub>B</sub> − L<sub>A</sub> − L<sub>B</sub> − ${Lp}.` +
       (resModelo.incluyeTerreno ? ` Aquí ${Lp} es la pérdida de Longley–Rice, que ya incluye el relieve.` : ''),

@@ -7,7 +7,7 @@
 // actualizar (zonas guardadas para usar sin conexión).
 // Al publicar una versión nueva, cambia el número de VERSION.
 // =====================================================================
-const VERSION = 'radioenlace-v1.4.0';
+const VERSION = 'radioenlace-v1.5.0';
 const NUCLEO = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/radio.js', './js/terreno.js', './js/modelos.js', './js/mapa.js',
@@ -17,6 +17,10 @@ const NUCLEO = [
   './iconos/icono-192.png', './iconos/icono-512.png', './iconos/apple-touch-icon.png', './iconos/favicon-32.png',
   './iconos/icono-maskable-512.png',
   './js/ejercicios.js', './js/ejercicios-ui.js', './js/qr.js', './js/enlace.js',
+  './js/catalogo-lineas.js', './js/lineas.js', './js/lineas-ui.js',
+  './js/p676.js', './js/p838.js', './js/p530.js', './js/datos-uit.js', './js/disponibilidad.js', './js/disponibilidad-ui.js',
+  './datos/uit-espana.json',
+  './js/etsi.js', './js/capacidad.js', './js/capacidad-ui.js',
 ];
 const TESELAS = `${VERSION}-teselas`;
 const RELIEVE_APP = 'radioenlace-relieve';   // la gestiona js/terreno.js: se conserva entre versiones
